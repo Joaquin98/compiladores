@@ -1,0 +1,6 @@
+Cosas que se pueden agregar:
+
+- Comando para resetear las funciones que fueron cargadas (:r) para evitar
+  tener que ejecutar el main cada vez que se agrega una nueva fución.
+
+- Comando para cargar todos los archivos .pcf que hayan en test.
