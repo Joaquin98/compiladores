@@ -4,3 +4,16 @@ Cosas que se pueden agregar:
   tener que ejecutar el main cada vez que se agrega una nueva fución.
 
 - Comando para cargar todos los archivos .pcf que hayan en test.
+
+
+Consultas:
+
+- Fix con muchos argumentos. Porque en la parte de implementacion dice que 
+SFix tiene [(Name, Ty)].
+- Se puede hacer let rec x:t = x + 1?
+- Donde hacer el reemplazo de tipos:
+-- En el handleDecl en el main (STm que tome parametro para los tipos y hacer la conversion).
+Tomamos Type n = t como una declaración. Una declaración puede ser tanto un let como un type 
+(Either TDecl, TTDecl).
+-- Parsear directamente a STm. No sabemos como se haría para llevar un estado (que realcione 
+nombre de tipos con tipos) mientras parseamos.

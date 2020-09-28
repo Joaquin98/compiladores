@@ -26,6 +26,12 @@ data Ty =
     | FunTy Ty Ty
     deriving (Show,Eq)
 
+data STy = 
+      DTy Name
+    | NatTy 
+    | FunTy STy STy
+    deriving (Show,Eq)
+
 type Name = String
 
 data Const = CNat Int
@@ -38,6 +44,10 @@ data UnaryOp = Succ | Pred
 data Decl a =
     Decl { declPos :: Pos, declName :: Name, declBody :: a }
   deriving (Show,Functor)
+
+type SDecl a = Decl (STy, a) -- Tiene nombres 
+type TTDecl a = Decl (Ty, a) -- Tipos ya resueltos
+type TDecl = Decl Ty -- Type 
 
 -- | AST de los términos. 
 --   - info es información extra que puede llevar cada nodo. 
@@ -53,8 +63,29 @@ data Tm info var =
   | IfZ info (Tm info var) (Tm info var) (Tm info var)
   deriving (Show, Functor)
 
+
+data STm info var bind = 
+    SV info var
+  | SConst info Const
+  | SLam info bind (STm info var bind)
+  | SApp info (STm info var bind) (STm info var bind)
+  | SUnaryOpApp info UnaryOp (STm info var bind)
+  | SUnaryOp info UnaryOp 
+  | SFix info Name Ty Name Ty (STm info var bind)
+  | SIfZ info (STm info var bind) (STm info var bind) (STm info var bind)
+  | SLetIn info Name Ty (STm info var bind) (STm info var bind)
+  | SLetInFun info Name bind Ty (STm info var bind) (STm info var bind)
+  | SRec info Name bind Ty (STm info var bind) (STm info var bind)
+  deriving (Show, Functor)
+
+type UnaryBind = [(Name, Ty)]
+type MultiBind = [([Name], Ty)]
+
+type SMNTerm = STm Pos Name MultiBind
+type SUNTerm = STm Pos Name UnaryBind
 type NTerm = Tm Pos Name   -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
 type Term = Tm Pos Var     -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
+
 
 data Var = 
     Bound !Int
