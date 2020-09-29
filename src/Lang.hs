@@ -27,9 +27,9 @@ data Ty =
     deriving (Show,Eq)
 
 data STy = 
-      DTy Name
-    | NatTy 
-    | FunTy STy STy
+      DTy Name -- Declaracion de tipo
+    | SNatTy 
+    | SFunTy STy STy
     deriving (Show,Eq)
 
 type Name = String
@@ -42,12 +42,17 @@ data UnaryOp = Succ | Pred
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a =
-    Decl { declPos :: Pos, declName :: Name, declBody :: a }
+    Decl { declPos :: Pos, declName :: Name, declBody :: a}
   deriving (Show,Functor)
 
-type SDecl a = Decl (STy, a) -- Tiene nombres 
+type SMNDecl = Decl (STy, [(MultiBind, STy)], Bool, SMNTerm) -- Tiene nombres 
+type MNDecl = Decl (Ty, [(MultiBind, Ty)], Bool, MNTerm) -- Tiene nombres
+type UNDecl = Decl (Ty, [(UnaryBind, Ty)], Bool, UNTerm) -- Tiene nombres 
+type NDecl = Decl (Ty, UNTerm) -- Tiene nombres 
 type TTDecl a = Decl (Ty, a) -- Tipos ya resueltos
-type TDecl = Decl Ty -- Type 
+type STDecl = Decl STy -- Type 
+type TDecl = Decl Ty
+
 
 -- | AST de los términos. 
 --   - info es información extra que puede llevar cada nodo. 
@@ -64,25 +69,29 @@ data Tm info var =
   deriving (Show, Functor)
 
 
-data STm info var bind = 
+data STm info var bind ty = 
     SV info var
   | SConst info Const
-  | SLam info bind (STm info var bind)
-  | SApp info (STm info var bind) (STm info var bind)
-  | SUnaryOpApp info UnaryOp (STm info var bind)
+  | SLam info [(bind,ty)] (STm info var bind ty)
+  | SApp info (STm info var bind ty) (STm info var bind ty)
+  | SUnaryOpApp info UnaryOp (STm info var bind ty)
   | SUnaryOp info UnaryOp 
-  | SFix info Name Ty Name Ty (STm info var bind)
-  | SIfZ info (STm info var bind) (STm info var bind) (STm info var bind)
-  | SLetIn info Name Ty (STm info var bind) (STm info var bind)
-  | SLetInFun info Name bind Ty (STm info var bind) (STm info var bind)
-  | SRec info Name bind Ty (STm info var bind) (STm info var bind)
+  | SFix info Name ty Name ty (STm info var bind ty)
+  | SIfZ info (STm info var bind ty) (STm info var bind ty) (STm info var bind ty)
+  -- | SLetIn info Name ty (STm info var bind ty) (STm info var bind ty)
+  | SLetIn info Name [(bind, ty)] ty (STm info var bind ty) (STm info var bind ty)
+  | SRec info Name [(bind, ty)] ty (STm info var bind ty) (STm info var bind ty)
   deriving (Show, Functor)
 
-type UnaryBind = [(Name, Ty)]
-type MultiBind = [([Name], Ty)]
+type UnaryBind = Name
+type MultiBind = [Name]
 
-type SMNTerm = STm Pos Name MultiBind
-type SUNTerm = STm Pos Name UnaryBind
+
+type SMNTerm = STm Pos Name MultiBind STy
+
+type MNTerm = STm Pos Name MultiBind Ty
+type UNTerm = STm Pos Name UnaryBind Ty
+
 type NTerm = Tm Pos Name   -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
 type Term = Tm Pos Var     -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
 

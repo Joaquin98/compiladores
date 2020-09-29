@@ -1,0 +1,2 @@
+- try en el unaryOp
+- parserZero en letRec

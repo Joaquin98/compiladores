@@ -15,34 +15,12 @@ module Elab ( elab, elab_decl ) where
 import Lang
 import Subst
 
-{-
-data STm info var = 
-    SV info var
-  | SConst info Const
-  | SLam info [([Name],Ty)] (STm info var)
-  | SApp info (STm info var) (STm info var)
-  
-  | SUnaryOpApp info UnaryOp (STm info var)
-  | SUnaryOp info UnaryOp 
-
-  | SFix info [(Name,Ty)] (STm info var)
-  | SIfZ info (STm info var) (STm info var) (STm info var)
-  
-  | SLetIn info Name Ty (STm info var) (STm info var)
-
-  | SLetInFun info Name [([Name],Ty)] Ty (STm info var) (STm info var)
-  
-  | SRec info Name [([Name],Ty)] Ty (STm info var) (STm info var)
-
-  deriving (Show, Functor)
--}
-
 binderExp :: [([Name], Ty)] -> [(Name, Ty)]
 binderExp [] = []
 binderExp (([x], t):bs) = (x, t): (binderExp bs)
 binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
 
-expandBinders :: SMNTerm -> SUNTerm
+expandBinders :: MNTerm -> UNTerm
 expandBinders (SV info var) = SV info var
 expandBinders (SConst info const) = SConst info const
 expandBinders (SLam info binds t) = SLam info (binderExp binds) (expandBinders t)
@@ -51,8 +29,7 @@ expandBinders (SUnaryOpApp info op t) = SUnaryOpApp info op (expandBinders t)
 expandBinders (SUnaryOp info unaryOp) = SUnaryOp info unaryOp  
 expandBinders (SFix info n1 t1 n2 t2 t) = SFix info n1 t1 n2 t2 (expandBinders t)
 expandBinders (SIfZ info c t1 t2) = SIfZ info (expandBinders c) (expandBinders t1) (expandBinders t2)
-expandBinders (SLetIn info name ty t t') = SLetIn info name ty (expandBinders t) (expandBinders t')
-expandBinders (SLetInFun info name binds ty t t') = SLetInFun info name (binderExp binds) ty (expandBinders t) (expandBinders t')
+expandBinders (SLetIn info name binds ty t t') = SLetInFun info name (binderExp binds) ty (expandBinders t) (expandBinders t')
 expandBinders (SRec info name binds ty t t') = SRec info name (binderExp binds) ty (expandBinders t) (expandBinders t')
 
 
@@ -62,7 +39,7 @@ getFunType ((n, t):bs) = FunTy t (getFunType bs)
 
 
 
-desugar :: SUNTerm -> NTerm
+desugar :: UNTerm -> NTerm
 desugar (SV info var) = V info var 
 desugar (SConst info c) = Const info c 
 desugar (SLam info binds t) = foldr (\(name,ty) ti -> Lam info name ty ti) (desugar t) binds 
@@ -71,8 +48,8 @@ desugar (SUnaryOpApp info op t) = UnaryOp info op (desugar t)
 desugar (SUnaryOp info op) = Lam info "x" NatTy (UnaryOp info op (V info "x"))
 desugar (SFix info n1 t1 n2 t2 t) = Fix info n1 t1 n2 t2 (desugar t)
 desugar (SIfZ info c t1 t2) = IfZ info (desugar c) (desugar t1) (desugar t2)
-desugar (SLetIn info name ty t t') = App info (Lam info name ty (desugar t')) (desugar t)
-desugar (SLetInFun info name binds ty t t') = let funTy = (FunTy (getFunType binds) ty) 
+desugar (SLetIn info name [] ty t t') = App info (Lam info name ty (desugar t')) (desugar t)
+desugar (SLetIn info name binds ty t t') = let funTy = (FunTy (getFunType binds) ty) 
                                                   newTerm = SLetIn info name funTy (SLam info binds t) t'                                         
                                               in desugar newTerm
 desugar (SRec info name [(ni,ti)] ty t t') = let fixTerm = SFix info name (FunTy ti ty) ni ti t 
@@ -95,8 +72,8 @@ elabLN (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elabLN t))
 elabLN (IfZ p c t e)         = IfZ p (elabLN c) (elabLN t) (elabLN e)
 elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
 
-elab_decl :: Decl SMNTerm -> Decl Term
+elab_decl :: Decl MNTerm -> Decl Term
 elab_decl = fmap elab
 
-elab :: SMNTerm -> Term
+elab :: MNTerm -> Term
 elab = elabLN . desugar . expandBinders
