@@ -82,9 +82,15 @@ parseIO filename p x = case runP p x filename of
                   Left e  -> throwError (ParseErr e)
                   Right r -> return r
 
-handleTermDecl ::  MonadPCF m => SDecl SMNTerm -> m ()
+handleTermDecl ::  MonadPCF m => SDecl SMNTerm MultiBind STy -> m ()
 handleTermDecl (Decl p x t) = do
+--      d <- elabD declaracion
+--      cambiar tipos
+--      case d of 
+--      type -> look... addTy...
+--      Decl ->
         let tt = elab t
+--      cambiar tipos
         tcDecl (Decl p x tt)    
         te <- eval tt
         addDecl (Decl p x te)

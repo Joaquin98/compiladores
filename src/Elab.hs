@@ -15,22 +15,75 @@ module Elab ( elab, elab_decl ) where
 import Lang
 import Subst
 
+{-
+
+elabType :: MonadPCF m => m(SDecl SMNTerm MultiBind STy) -> m(SDecl SMNTerm MultiBind NTy)
+elabType = do decl <- 
+
+              return 
+
+{-
+data STy = 
+      DTy Name -- Declaracion de tipo
+    | SNatTy 
+    | SFunTy STy STy
+    deriving (Show,Eq)
+-}
+
+convertType :: STy -> NTy
+convertType (DTy name) = Ntype "" NatTy
+convertType SNatTy = Ntype "" NatTy
+convertType  = do
+
+-}
+{-
+data SDecl term bind ty =
+    DTer Pos Name [(bind, ty)] STy Bool term 
+  | DType Pos Name ty
+  deriving (Show,Functor)
+-}
+
+expBindersD :: SDecl SMNTerm MultiBind STy -> SDecl SMNTerm UnaryBind STy
+expBindersD (DTer i name bs ty b term) = DTer i name (binderExp bs) ty b term
+expBindersD (DType i name ty) = DType i name ty
+
+
+
+desugarD :: SDecl SMNTerm UnaryBind STy -> Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)
+desugarD (DTer i name [] ty False term) = Right (Decl i name ty term)
+desugarD (DTer i name b:bs ty False term) = let ts = getFunType (b:bs) 
+                                            in Right (Decl i name (SFunTy ts ty) (SLam i (b:bs) term))
+  
+desugarD (DTer i name [(v, t)] ty True term) = Right (Decl i name (SFunTy t ty) (SFix i name (SFunTy t ty) v t term))
+desugarD (DTer i name b:bs ty True term) = let ts = getFunType bs
+                                               new = (DTer i name [b] (SFunTy ts ty) True (SLam i bs term)) 
+                                           in  desugar new
+
+desugarD d@(DType i name ty) = Left d
+
+
+- parser :  [SDecl SMNTerm MultiBind STy]
+- expBinders : [SDecl SMNTerm UnaryBind STy]
+- desugarD : [Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)]
+- 
+
+
 binderExp :: [([Name], Ty)] -> [(Name, Ty)]
 binderExp [] = []
 binderExp (([x], t):bs) = (x, t): (binderExp bs)
 binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
 
-expandBinders :: MNTerm -> UNTerm
-expandBinders (SV info var) = SV info var
-expandBinders (SConst info const) = SConst info const
-expandBinders (SLam info binds t) = SLam info (binderExp binds) (expandBinders t)
-expandBinders (SApp info t1 t2) = SApp info (expandBinders t1) (expandBinders t2)
-expandBinders (SUnaryOpApp info op t) = SUnaryOpApp info op (expandBinders t)
-expandBinders (SUnaryOp info unaryOp) = SUnaryOp info unaryOp  
-expandBinders (SFix info n1 t1 n2 t2 t) = SFix info n1 t1 n2 t2 (expandBinders t)
-expandBinders (SIfZ info c t1 t2) = SIfZ info (expandBinders c) (expandBinders t1) (expandBinders t2)
-expandBinders (SLetIn info name binds ty t t') = SLetInFun info name (binderExp binds) ty (expandBinders t) (expandBinders t')
-expandBinders (SRec info name binds ty t t') = SRec info name (binderExp binds) ty (expandBinders t) (expandBinders t')
+expBinders :: MNTerm -> UNTerm
+expBinders (SV info var) = SV info var
+expBinders (SConst info const) = SConst info const
+expBinders (SLam info binds t) = SLam info (binderExp binds) (expBinders t)
+expBinders (SApp info t1 t2) = SApp info (expBinders t1) (expBinders t2)
+expBinders (SUnaryOpApp info op t) = SUnaryOpApp info op (expBinders t)
+expBinders (SUnaryOp info unaryOp) = SUnaryOp info unaryOp  
+expBinders (SFix info n1 t1 n2 t2 t) = SFix info n1 t1 n2 t2 (expBinders t)
+expBinders (SIfZ info c t1 t2) = SIfZ info (expBinders c) (expBinders t1) (expBinders t2)
+expBinders (SLetIn info name binds ty t t') = SLetInFun info name (binderExp binds) ty (expBinders t) (expBinders t')
+expBinders (SRec info name binds ty t t') = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
 
 
 getFunType :: [(Name, Ty)] -> Ty
@@ -76,4 +129,4 @@ elab_decl :: Decl MNTerm -> Decl Term
 elab_decl = fmap elab
 
 elab :: MNTerm -> Term
-elab = elabLN . desugar . expandBinders
+elab = elabLN . desugar . expBinders

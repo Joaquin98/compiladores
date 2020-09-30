@@ -32,6 +32,9 @@ data STy =
     | SFunTy STy STy
     deriving (Show,Eq)
 
+-- Tipo nombrado.
+data NTy = NType Name Ty
+
 type Name = String
 
 data Const = CNat Int
@@ -41,10 +44,21 @@ data UnaryOp = Succ | Pred
   deriving Show
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
-data Decl a =
-    Decl { declPos :: Pos, declName :: Name, declBody :: a}
+data Decl a b =
+    Decl { declPos :: Pos, declName :: Name, declType:: b, declBody :: a}
   deriving (Show,Functor)
 
+data SDecl term bind ty =
+    DTer Pos Name [(bind, ty)] STy Bool term 
+  | DType Pos Name ty
+  deriving (Show,Functor)
+
+SDecl SMNTerm MultiBind STy
+SDecl SMNTerm MultiBind NTy
+SDecl SMNTerm UnaryBind NTy
+--SDecl NTerm UnaryBind NTy
+
+{-
 type SMNDecl = Decl (STy, [(MultiBind, STy)], Bool, SMNTerm) -- Tiene nombres 
 type MNDecl = Decl (Ty, [(MultiBind, Ty)], Bool, MNTerm) -- Tiene nombres
 type UNDecl = Decl (Ty, [(UnaryBind, Ty)], Bool, UNTerm) -- Tiene nombres 
@@ -52,7 +66,7 @@ type NDecl = Decl (Ty, UNTerm) -- Tiene nombres
 type TTDecl a = Decl (Ty, a) -- Tipos ya resueltos
 type STDecl = Decl STy -- Type 
 type TDecl = Decl Ty
-
+-}
 
 -- | AST de los términos. 
 --   - info es información extra que puede llevar cada nodo. 
@@ -85,6 +99,7 @@ data STm info var bind ty =
 
 type UnaryBind = Name
 type MultiBind = [Name]
+
 
 
 type SMNTerm = STm Pos Name MultiBind STy

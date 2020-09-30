@@ -9,15 +9,12 @@ Cosas que se pueden agregar:
 Consultas:
 
 - Fix con muchos argumentos. Porque en la parte de implementacion dice que 
-SFix tiene [(Name, Ty)].
-
-- Se puede hacer let rec x:t = x + 1?
-
-- ExpandBinders x = x ?  (como castear?)
+SFix tiene [(Name, Ty)]. Como queramos.
 
 (Mostrar y explicar como fuimos haciendo todo)
 - Muchos tipos distintos, uno para cada paso de conversión (multibinding, nombres de tipos,
                                                             desugaring)
+                                                            
 - Conversion de los tipos nombre a tipos iria en el main (en el elab no se puede x el entorno)                                                            
 
 - Donde convertir las declaraciones? Nuevo modulo?
