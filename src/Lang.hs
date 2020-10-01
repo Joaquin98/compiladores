@@ -52,13 +52,14 @@ data SDecl term bind ty =
     DTer Pos Name [(bind, ty)] STy Bool term 
   | DType Pos Name ty
   deriving (Show,Functor)
-
+  
+{-
 SDecl SMNTerm MultiBind STy
 SDecl SMNTerm MultiBind NTy
 SDecl SMNTerm UnaryBind NTy
 --SDecl NTerm UnaryBind NTy
 
-{-
+
 type SMNDecl = Decl (STy, [(MultiBind, STy)], Bool, SMNTerm) -- Tiene nombres 
 type MNDecl = Decl (Ty, [(MultiBind, Ty)], Bool, MNTerm) -- Tiene nombres
 type UNDecl = Decl (Ty, [(UnaryBind, Ty)], Bool, UNTerm) -- Tiene nombres 

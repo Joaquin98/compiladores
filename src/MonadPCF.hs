@@ -24,6 +24,8 @@ module MonadPCF (
   failPCF,
   addDecl,
   addTy,
+  addSynTy,
+  lookupSynTy,
   catchErrors,
   MonadPCF,
   module Control.Monad.Except,
@@ -58,13 +60,36 @@ class (MonadIO m, MonadState GlEnv m, MonadError Error m) => MonadPCF m where
 printPCF :: MonadPCF m => String -> m ()
 printPCF = liftIO . putStrLn
 
-addDecl :: MonadPCF m => Decl Term -> m ()
+addDecl :: MonadPCF m => Decl Term Ty -> m ()
 addDecl d = modify (\s -> s { glb = d : glb s })
   
 addTy :: MonadPCF m => Name -> Ty -> m ()
 addTy n ty = modify (\s -> s { tyEnv = (n,ty) : tyEnv s })
 
-hasName :: Name -> Decl a -> Bool
+----------------------------------------------------------
+-- Inicio parte agregada para sinonimos de tipos.
+----------------------------------------------------------
+
+-- Agrega un sinónimo de tipo
+-- Al nombre n le corresponde el tipo ty
+
+addSynTy :: MonadPCF m => Name -> Ty -> m ()
+addSynTy n ty = modify (\s -> s { synTy = (n,ty) : synTy s })
+
+-- Busca si nm es un sinonimo de tipo, retornando
+-- el tipo si es que lo es.
+
+lookupSynTy :: MonadPCF m => Name -> m (Maybe Ty)
+lookupSynTy nm = do
+      s <- get
+      return $ lookup nm (synTy s)
+
+----------------------------------------------------------
+-- Fin parte agregada para sinonimos de tipos.
+----------------------------------------------------------
+
+
+hasName :: Name -> Decl a b -> Bool
 hasName nm (Decl { declName = nm' }) = nm == nm'
 
 lookupDecl :: MonadPCF m => Name -> m (Maybe Term)

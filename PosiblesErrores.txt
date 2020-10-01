@@ -1,2 +1,15 @@
 - try en el unaryOp
+El try siempre vuelve atras lo consumido por un 
+parser que terminó en error, en cambio el <|> solo
+ejecuta el siguiente en caso que el primer intento
+no haya consumido ningun texto.
+
 - parserZero en letRec
+ParserZero es un parser que falla siempre sin consumir 
+nada.
+
+- La funciones existentes de los tipos en el entorno 
+global no eran para usar con los sinonimos de tipos
+sino que eran para ir guardando en tipo de cada variable
+declarada en un let para usarlos luego en el typeChecker.
+

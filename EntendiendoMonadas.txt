@@ -1,0 +1,11 @@
+handleTermDecl ::  MonadPCF m => SDecl SMNTerm MultiBind STy -> m ()
+handleTermDecl (Decl p x t) = do
+        let tt = elab t
+        tcDecl (Decl p x tt)    
+        te <- eval tt
+        addDecl (Decl p x te)
+
+
+
+y otras operaciones derivadas de ellas, como por ejemplo
+   - @modify :: (GlEnv -> GlEnv) -> m ()

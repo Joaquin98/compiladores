@@ -217,34 +217,34 @@ tm :: P SMNTerm
 tm = app <|> lam <|> ifz <|> unaryOp <|> fix <|> letIn 
 
 -- | Parser de declaraciones
-declLet :: P SMNDecl
+declLet :: P (SDecl SMNTerm MultiBind STy)
 declLet = do 
      i <- getPos
      ((v, bs, ty), b, t) <- letP
-     return (Decl i v (ty, bs, b, t))
+     return (DTer i v bs ty b t)
 
-declT :: P STDecl
+declT :: P (SDecl SMNTerm MultiBind STy)
 declT = do i <- getPos
            reserved "type"
            v <- var
            reservedOp "="
            ty <- typeP
-           return (Decl i v ty)
+           return (DType i v ty)
 
-decl :: P (Either SMNDecl STDecl)
+decl :: P (SDecl SMNTerm MultiBind STy)
 decl = try (do t <- declLet
-               return (Left t))
+               return t)
        <|> (do t <- declT
-               return (Right t))
+               return t)
 
 -- | Parser de programas (listas de declaraciones) 
-program :: P [(Either SMNDecl STDecl)]
+program :: P [(SDecl SMNTerm MultiBind STy)]
 program = many decl
 
--- | Parsea una declaración a un término
+-- | Parsea una declaración o un término
 -- Útil para las sesiones interactivas
-declOrTm :: P (Either (Either SMNDecl STDecl) SMNTerm)
-declOrTm =  try (Left <$> decl) <|> (Right <$> tm)
+declOrTm :: P (Either (SDecl SMNTerm MultiBind STy) SMNTerm)
+declOrTm =  try (Right <$> tm) <|> (Left <$> decl)
 
 -- Corre un parser, chequeando que se pueda consumir toda la entrada
 runP :: P a -> String -> String -> Either ParseError a
@@ -255,3 +255,6 @@ parse :: String -> SMNTerm
 parse s = case runP tm s "" of
             Right t -> t
             Left e -> error ("no parse: " ++ show s)
+
+--  parse  "let rec f (x z y : Nat) : Nat = x in f 4 " 
+--  runP declOrTm  "let rec f (x z y : Nat) : Nat = x in f 4 " ""
