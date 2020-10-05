@@ -1,30 +1,33 @@
 type N = Nat
 
 
-let suma:N = fix(s:Nat->Nat->Nat)(x:Nat) -> fun (y:Nat) -> ifz y then x else s (succ x) (pred y)
+let rec suma(x y : N) : N = ifz y then x else suma (succ x) (pred y)
 
 let rec suman(x:N):N = ifz x then 0 else suma x (suman (pred x)) 
 
 let doble(x:N):N = suma x x 
 
+let sumard(x y:N)(f :N -> N):N = f (suma x y)
 
-let resta:Nat = fix(r:Nat->Nat->Nat)(x:Nat) -> fun (y:Nat) -> ifz y then x else r (pred x) (pred y)
+let rec fib(x:N):N = ifz x then 1 else (ifz pred x then 1 else suma (fib (pred x)) (fib (pred (pred x))))  
 
-let mult:Nat = fix(m:Nat->Nat->Nat)(x:Nat) -> fun (y:Nat) -> ifz y then 0 else suma x (m x (pred y))
+let rec resta(x y : N):Nat = ifz y then x else resta (pred x) (pred y)
 
-let exp:Nat = fix(e:Nat->Nat->Nat)(x:Nat) -> fun (y:Nat) -> ifz y then 1 else mult x (e x (pred y))
+let rec mult(x y : N):Nat =ifz y then 0 else suma x (mult x (pred y))
 
-let fact:Nat = fix(f:Nat->Nat)(x:Nat) -> ifz x then 1 else mult x (f (pred x))
+let rec exp(x y : N):Nat = ifz y then 1 else mult x (exp x (pred y))
 
-let gcd:Nat = fix(g:Nat->Nat->Nat)(m:Nat) -> fun (n:Nat) -> ifz n then m else 
-                                                        ifz m then n else 
-                                                        ifz (resta n m) then g (resta m n) n else g m (resta n m)
+let rec fact (x:N):Nat =  ifz x then 1 else mult x (fact (pred x))
 
-let min':Nat = fix (m:Nat->(Nat->Nat)->Nat) (n:Nat) -> fun(f:Nat->Nat) -> ifz f n then n else m (succ n) f
+let rec gcd(n m : N):Nat =  ifz n then m else 
+                            ifz m then n else 
+                            ifz (resta n m) then gcd (resta m n) n else gcd m (resta n m)
 
-let min:Nat = min' 0 
+#let min':Nat = fix (m:Nat->(Nat->Nat)->Nat) (n:Nat) -> fun(f:Nat->Nat) -> ifz f n then n else m (succ n) f
 
-let f:Nat = fun(x:Nat) -> resta 3 x
+#let min:Nat = min' 0 
 
-let R:Nat = fix(r:Nat->(Nat->Nat->Nat)->Nat->Nat) (a:Nat) -> fun(b:Nat->Nat->Nat) -> fun(n:Nat) -> 
-    ifz n then a else b (r a b (pred n)) (pred n)
+let f:(Nat -> Nat) = fun(x:Nat) -> resta 3 x
+
+#let R:Nat = fix(r:Nat->(Nat->Nat->Nat)->Nat->Nat) (a:Nat) -> fun(b:Nat->Nat->Nat) -> fun(n:Nat) -> 
+#    ifz n then a else b (r a b (pred n)) (pred n)

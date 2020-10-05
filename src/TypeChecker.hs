@@ -39,7 +39,7 @@ tc (IfZ p c t t') bs = do
        tyt  <- tc t bs
        tyt' <- tc t' bs
        expect tyt tyt' t'
-tc (Lam p v ty t) bs = do
+tc (Lam p v (NType n ty) t) bs = do
          ty' <- tc (open v t) ((v,ty):bs)
          return (FunTy ty ty')
 tc (App p t u) bs = do
@@ -48,13 +48,14 @@ tc (App p t u) bs = do
          tyu <- tc u bs
          expect dom tyu u
          return cod
-tc (Fix p f fty x xty t) bs = do
+tc (Fix p f (NType _ fty) x (NType _ xty) t) bs = do
          (dom, cod) <- domCod (V p (Free f)) fty
          when (dom /= xty) $ do
            failPosPCF p "El tipo del argumento de un fixpoint debe coincidir con el \
                         \dominio del tipo de la función"
-         ty' <- tc (openN [f, x] t) ((x,xty):(f,fty):bs)
-         expect cod ty' t
+         let t' = openN [f, x] t
+         ty' <- tc t' ((x,xty):(f,fty):bs)
+         expect cod ty' t'
          return fty
 
 
@@ -83,13 +84,15 @@ domCod t ty = typeError t $ "Se esperaba un tipo función, pero se obtuvo: " ++ 
 
 -- | 'tcDecl' chequea el tipo de una declaración
 -- y la agrega al entorno de tipado de declaraciones globales
-tcDecl :: MonadPCF m  => Decl Term Ty -> m ()
-tcDecl (Decl p n ty t) = do
+tcDecl :: MonadPCF m  => Decl Term NTy -> m ()
+tcDecl (Decl p n (NType _ ty) t) = do
     --chequear si el nombre ya está declarado
     mty <- lookupTy n
     case mty of
         Nothing -> do  --no está declarado 
                   s <- get
-                  ty <- tc t (tyEnv s)                 
-                  addTy n ty
+                  tyR <- tc t (tyEnv s)
+                  if ty == tyR 
+                  then addTy n ty
+                  else failPosPCF p $ n ++" error de tipo: se esperaba " ++ show(ty) ++ " se encontro " ++ show(tyR)
         Just _  -> failPosPCF p $ n ++" ya está declarado"

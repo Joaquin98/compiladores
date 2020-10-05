@@ -23,12 +23,11 @@ import Control.Exception ( catch , IOException )
 import System.Environment ( getArgs )
 import System.IO ( stderr, hPutStr )
 
-import Common
 import Global ( GlEnv(..) )
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab , elabD)
+import Elab ( elab , elabD, rmvSynTerm, styToNTy)
 import Eval ( eval )
 import PPrint ( pp , ppTy )
 import MonadPCF
@@ -92,74 +91,20 @@ handleDecl decl = do let ed = elabD decl
 -- Maneja la ejecucion de las declaraciones de terminos.
 handleTermDecl ::  MonadPCF m => Decl SMNTerm STy -> m ()
 handleTermDecl (Decl p name sty termSty) = do
-        ty <- styToTy sty
-        termTy <- rmvSynTerm termSty
-        let tt = elab termTy
+        ty <- styToNTy sty
+        tt <- elab termSty
         tcDecl (Decl p name ty tt)    
         te <- eval tt
         addDecl (Decl p name ty te) 
 
--- Reemplaza los sinonimos de tipos en un termino por lo que representa. 
-rmvSynTerm :: MonadPCF m => SMNTerm -> m (MNTerm)
-rmvSynTerm (SV i name) = return (SV i name)  
-rmvSynTerm (SConst i c) = return (SConst i c)  
-rmvSynTerm (SLam i bsSTy t) = do bsTy <- rmvSynBinds bsSTy
-                                 tTy <- rmvSynTerm t
-                                 return (SLam i bsTy tTy)  
-rmvSynTerm (SApp i t1 t2) = do t1Ty <- rmvSynTerm t1
-                               t2Ty <- rmvSynTerm t2
-                               return (SApp i t1Ty t2Ty)
-rmvSynTerm (SUnaryOpApp i op t) = do tTy <- rmvSynTerm t
-                                     return (SUnaryOpApp i op tTy)
-rmvSynTerm (SUnaryOp i op) = return (SUnaryOp i op)
-rmvSynTerm (SFix i n1 sty1 n2 sty2 t) = do ty1 <- styToTy sty1
-                                           ty2 <- styToTy sty2  
-                                           tTy <- rmvSynTerm t
-                                           return (SFix i n1 ty1 n2 ty2 tTy)
-rmvSynTerm (SIfZ i c t1 t2) = do cTy <- rmvSynTerm c
-                                 t1Ty <- rmvSynTerm t1
-                                 t2Ty <- rmvSynTerm t2
-                                 return (SIfZ i cTy t1Ty t2Ty)
-rmvSynTerm (SLetIn i name bsSTy sty t t') = do bsTy <- rmvSynBinds bsSTy
-                                               ty <- styToTy sty
-                                               tTy <- rmvSynTerm t
-                                               tTy' <- rmvSynTerm t'
-                                               return (SLetIn i name bsTy ty tTy tTy')
-rmvSynTerm (SRec i name bsSTy sty t t') = do bsTy <- rmvSynBinds bsSTy
-                                             ty <- styToTy sty
-                                             tTy <- rmvSynTerm t
-                                             tTy' <- rmvSynTerm t'
-                                             return (SRec i name bsTy ty tTy tTy')
-
-
--- Transforma una lista de binders con tipos con sinonimos en una con
--- tipos sin sinonimos.
-rmvSynBinds :: MonadPCF m => [(MultiBind,STy)] -> m ([(MultiBind,Ty)])
-rmvSynBinds [] = return [] 
-rmvSynBinds ((ns,sty):bs) = do ty <- styToTy sty
-                               bsTy <- rmvSynBinds bs  
-                               return ((ns,ty):bsTy)
-
 -- Maneja la ejecucion de las declaraciones de sinonimos de tipos.
 handleTypeDecl :: MonadPCF m => SDecl SMNTerm UnaryBind STy -> m ()
-handleTypeDecl (DType i name sty) = do  ty <- styToTy sty
+handleTypeDecl (DType i name sty) = do  (NType _ ty) <- styToNTy sty
                                         mty <- lookupSynTy name
                                         case mty of 
                                           Just _ -> failPosPCF i $ name ++" ya existe como sinonimo de tipo"
                                           Nothing ->  addSynTy name ty
                                                         
-
--- Convierte un tipo con sinonimos en uno sin sinonimos.
-styToTy :: MonadPCF m => STy -> m (Ty)
-styToTy (DTy name) = do  mty <- lookupSynTy name
-                         case mty of 
-                          Nothing -> failPosPCF NoPos $ name ++" no existe el tipo"
-                          Just ty ->  return ty
-styToTy (SNatTy) = return NatTy
-styToTy (SFunTy sty1 sty2) = do ty1 <- (styToTy sty1)
-                                ty2 <- (styToTy sty2)
-                                return (FunTy ty1 ty2) 
-
 
 data Command = Compile CompileForm
              | Print String
@@ -243,8 +188,7 @@ compilePhrase x =
 
 handleTerm ::  MonadPCF m => SMNTerm -> m ()
 handleTerm t = do
-         tTy <- rmvSynTerm t
-         let tt = elab tTy
+         tt <- elab t
          s <- get
          ty <- tc tt (tyEnv s)
          te <- eval tt
@@ -254,21 +198,19 @@ printPhrase   :: MonadPCF m => String -> m ()
 printPhrase x =
   do
     xSTy <- parseIO "<interactive>" tm x
-    x' <- rmvSynTerm xSTy
-    let ex = elab x'
-    t  <- case x' of 
-           (SV p f) -> maybe ex id <$> lookupDecl f
-           _       -> return ex  
+    ex <- elab xSTy
+    t  <- case xSTy of 
+            (SV p f) -> maybe ex id <$> lookupDecl f
+            _       -> return ex  
     printPCF "NTerm:"
-    printPCF (show x')
+    printPCF (show xSTy)
     printPCF "\nTerm:"
     printPCF (show t)
 
 typeCheckPhrase :: MonadPCF m => String -> m ()
 typeCheckPhrase x = do
          tSTy <- parseIO "<interactive>" tm x
-         t <- rmvSynTerm tSTy
-         let tt = elab t
+         tt <- elab tSTy
          s <- get
          ty <- tc tt (tyEnv s)
          printPCF (ppTy ty)

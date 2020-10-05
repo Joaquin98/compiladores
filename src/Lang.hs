@@ -34,6 +34,7 @@ data STy =
 
 -- Tipo nombrado.
 data NTy = NType Name Ty
+    deriving (Show, Eq)
 
 type Name = String
 
@@ -73,14 +74,14 @@ type TDecl = Decl Ty
 --   - info es información extra que puede llevar cada nodo. 
 --       Por ahora solo la usamos para guardar posiciones en el código fuente.
 --   - var es el tipo de la variables. Es 'Name' para fully named y 'Var' para locally closed. 
-data Tm info var = 
+data Tm info var ty = 
     V info var
   | Const info Const
-  | Lam info Name Ty (Tm info var)
-  | App info (Tm info var) (Tm info var)
-  | UnaryOp info UnaryOp (Tm info var)
-  | Fix info Name Ty Name Ty (Tm info var)
-  | IfZ info (Tm info var) (Tm info var) (Tm info var)
+  | Lam info Name ty (Tm info var ty)
+  | App info (Tm info var ty) (Tm info var ty)
+  | UnaryOp info UnaryOp (Tm info var ty)
+  | Fix info Name ty Name ty (Tm info var ty)
+  | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
   deriving (Show, Functor)
 
 
@@ -104,12 +105,11 @@ type MultiBind = [Name]
 
 
 type SMNTerm = STm Pos Name MultiBind STy
+type SUNTerm = STm Pos Name UnaryBind STy
 
-type MNTerm = STm Pos Name MultiBind Ty
-type UNTerm = STm Pos Name UnaryBind Ty
-
-type NTerm = Tm Pos Name   -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
-type Term = Tm Pos Var     -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
+type SNTerm = Tm Pos Name STy
+type NTerm = Tm Pos Name NTy  -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
+type Term = Tm Pos Var NTy    -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
 
 
 data Var = 
@@ -118,7 +118,7 @@ data Var =
   deriving Show
 
 -- | Obtiene la info en la raíz del término.
-getInfo :: Tm info var -> info
+getInfo :: Tm info var ty -> info
 getInfo (V i _) = i
 getInfo (Const i _) = i
 getInfo (Lam i _ _ _) = i
@@ -128,7 +128,7 @@ getInfo (Fix i _ _ _ _ _) = i
 getInfo (IfZ i _ _ _) = i
 
 -- | Obtiene las variables libres de un término.
-freeVars :: Tm info Var -> [Name]
+freeVars :: Tm info Var ty -> [Name]
 freeVars (V _ (Free v))    = [v]
 freeVars (V _ _)           = []
 freeVars (Lam _ _ _ t)     = freeVars t

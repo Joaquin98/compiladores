@@ -14,7 +14,7 @@ import Lang
 data GlEnv = GlEnv {
   inter :: Bool,        --  ^ True, si estamos en modo interactivo.
   lfile :: String,      -- ^ Último archivo cargado.
-  glb :: [Decl Term Ty],   -- ^ Entorno con declaraciones globales
+  glb :: [Decl Term NTy],   -- ^ Entorno con declaraciones globales
   tyEnv :: [(Name,Ty)], -- ^ Entorno de tipado de declaraciones globales
   synTy :: [(Name,Ty)]  -- Sinonimos de tipos introducidos por type n = t
 }

@@ -19,6 +19,10 @@ SFix tiene [(Name, Ty)]. Como queramos.
 
 - Donde convertir las declaraciones? Nuevo modulo?
 
+5/10:
+- Que hacemos con el tipo NTy en el caso que SFunTy (NType "y" SNat) (SNat).
+  En el caso que no le pongamos nombre a los SFunTy perdemos los nombre de adentro.
+  Y si usamos un arbol cambiria mucho todo.
 
 
 

@@ -96,7 +96,7 @@ t2doc :: Bool     -- Debe ser un átomo?
 {- t2doc at x = text (show x) -}
 t2doc at (V _ x) = text x
 t2doc at (Const _ c) = c2doc c
-t2doc at (Lam _ v ty t) =
+t2doc at (Lam _ v (NType _ ty) t) =
   parenIf at $
   sep [sep [text "fun", parens (sep [name2doc v,text ":",ty2doc ty]), text "->"], nest 2 (t2doc False t)]
 
@@ -105,7 +105,7 @@ t2doc at t@(App _ _ _) =
   parenIf at $
   t2doc True h <+> sep (map (t2doc True) ts)
 
-t2doc at (Fix _ f fty x xty m) =
+t2doc at (Fix _ f (NType _ fty) x (NType _ xty) m) =
   parenIf at $
   sep [ sep [ text "fix", binding2doc (f, fty), binding2doc (x, xty), text "->" ]
       , nest 2 (t2doc False m)

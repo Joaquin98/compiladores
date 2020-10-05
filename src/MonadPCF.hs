@@ -60,7 +60,7 @@ class (MonadIO m, MonadState GlEnv m, MonadError Error m) => MonadPCF m where
 printPCF :: MonadPCF m => String -> m ()
 printPCF = liftIO . putStrLn
 
-addDecl :: MonadPCF m => Decl Term Ty -> m ()
+addDecl :: MonadPCF m => Decl Term NTy -> m ()
 addDecl d = modify (\s -> s { glb = d : glb s })
   
 addTy :: MonadPCF m => Name -> Ty -> m ()
