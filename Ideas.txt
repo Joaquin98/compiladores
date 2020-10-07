@@ -24,7 +24,9 @@ SFix tiene [(Name, Ty)]. Como queramos.
   En el caso que no le pongamos nombre a los SFunTy perdemos los nombre de adentro.
   Y si usamos un arbol cambiria mucho todo.
 
+- Nombre KArg en ([] t) por que?
 
+- Se podria guardar el termino completo detro de CFun o CFix? Ya que no cambiria ?.
 
 
 

@@ -1,6 +1,6 @@
-name:                compiladores
+name:                pcf
 version:             0.1.0.0
-github:              " compiladores-lcc/compiladores"
+github:              " Joaquin98/compiladores"
 license:             GPL-3
 author:              "Mauro Jaskelioff y Guido Martinez"
 maintainer:          "mauro@fceia.unr.edu.ar"
@@ -32,7 +32,7 @@ library:
   source-dirs: src
 
 executables:
-  compiladores-exe:
+  pcf:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -45,10 +45,10 @@ executables:
     - -fwarn-name-shadowing
     - -fwarn-incomplete-patterns
     dependencies:
-    - compiladores
+    - pcf
 
 tests:
-  compiladores-test:
+  pcf-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:

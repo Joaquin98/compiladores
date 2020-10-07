@@ -68,12 +68,12 @@ closeN ns = varChanger lcl (\_ p i -> V p (Bound i))
 -- generar ningún nombre, y por lo tanto evitamos la necesidad de
 -- nombres frescos.
 substN :: [Term] -> Term -> Term
-substN ns = varChanger (\_ p n -> V p (Free n)) bnd
+substN ns t = varChanger (\_ p n -> V p (Free n)) bnd t 
    where bnd depth p i 
              | i <  depth = V p (Bound i)
              | i >= depth && i < depth + nns
                 = nsr !! (i - depth)
-             | otherwise = abort "substN: M is not LC"
+             | otherwise = abort $ "substN: M is not LC" ++ show(ns) ++ show(t) ++ show(i) ++ show(depth)
          nns = length ns
          nsr = reverse ns
 

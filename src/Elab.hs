@@ -114,7 +114,7 @@ expBinders (SIfZ info c t1 t2) = SIfZ info (expBinders c) (expBinders t1) (expBi
 expBinders (SLetIn info name binds ty t t') = SLetIn info name (binderExp binds) ty (expBinders t) (expBinders t')
 expBinders (SRec info name binds ty t t') = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
 
-{-}
+{-
 getFunType :: [(Name, Ty)] -> Ty
 getFunType [(n, t)] = t
 getFunType ((n, t):bs) = FunTy t (getFunType bs)

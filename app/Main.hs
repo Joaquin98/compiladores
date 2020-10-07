@@ -28,7 +28,8 @@ import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
 import Elab ( elab , elabD, rmvSynTerm, styToNTy)
-import Eval ( eval )
+--import Eval ( eval )
+import CEK (eval)
 import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
@@ -214,3 +215,6 @@ typeCheckPhrase x = do
          s <- get
          ty <- tc tt (tyEnv s)
          printPCF (ppTy ty)
+
+
+--(fix (suma : Nat -> Nat -> Nat) (x : Nat) -> fun (y : Nat) -> ifz y then x else suma (succ x) (pred y)) 2 3 
