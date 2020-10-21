@@ -22,7 +22,8 @@ import Common ( Pos )
 
 -- | AST de Tipos
 data Ty = 
-      NatTy 
+      NTy Name Ty
+    | NatTy 
     | FunTy Ty Ty
     deriving (Show,Eq)
 
@@ -31,10 +32,6 @@ data STy =
     | SNatTy 
     | SFunTy STy STy
     deriving (Show,Eq)
-
--- Tipo nombrado.
-data NTy = NType Name Ty
-    deriving (Show, Eq)
 
 type Name = String
 
@@ -108,8 +105,8 @@ type SMNTerm = STm Pos Name MultiBind STy
 type SUNTerm = STm Pos Name UnaryBind STy
 
 type SNTerm = Tm Pos Name STy
-type NTerm = Tm Pos Name NTy  -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
-type Term = Tm Pos Var NTy    -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
+type NTerm = Tm Pos Name Ty  -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
+type Term = Tm Pos Var Ty    -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
 
 
 data Var = 

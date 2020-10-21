@@ -27,7 +27,7 @@ import Global ( GlEnv(..) )
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab , elabD, rmvSynTerm, styToNTy)
+import Elab ( elab , elabD, rmvSynTerm, styToTy)
 --import Eval ( eval )
 import CEK (eval)
 import PPrint ( pp , ppTy )
@@ -92,7 +92,7 @@ handleDecl decl = do let ed = elabD decl
 -- Maneja la ejecucion de las declaraciones de terminos.
 handleTermDecl ::  MonadPCF m => Decl SMNTerm STy -> m ()
 handleTermDecl (Decl p name sty termSty) = do
-        ty <- styToNTy sty
+        ty <- styToTy sty
         tt <- elab termSty
         tcDecl (Decl p name ty tt)    
         te <- eval tt
@@ -100,12 +100,12 @@ handleTermDecl (Decl p name sty termSty) = do
 
 -- Maneja la ejecucion de las declaraciones de sinonimos de tipos.
 handleTypeDecl :: MonadPCF m => SDecl SMNTerm UnaryBind STy -> m ()
-handleTypeDecl (DType i name sty) = do  (NType _ ty) <- styToNTy sty
-                                        mty <- lookupSynTy name
-                                        case mty of 
-                                          Just _ -> failPosPCF i $ name ++" ya existe como sinonimo de tipo"
-                                          Nothing ->  addSynTy name ty
-                                                        
+handleTypeDecl (DType i name sty) = do ty <- styToTy sty
+                                       mty <- lookupSynTy name
+                                       case mty of 
+                                         Just _ -> failPosPCF i $ name ++" ya existe como sinonimo de tipo"
+                                         Nothing ->  addSynTy name ty
+                                                      
 
 data Command = Compile CompileForm
              | Print String

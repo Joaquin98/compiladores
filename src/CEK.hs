@@ -23,8 +23,8 @@ data Val = VNat Const | VClos Clos
 
 type Env = [Val]
 
-data Clos = CFun Env Name NTy Term
-          | CFix Env Name NTy Name NTy Term
+data Clos = CFun Env Name Ty Term
+          | CFix Env Name Ty Name Ty Term
           deriving (Show)
 
 

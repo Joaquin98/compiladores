@@ -10,7 +10,7 @@ Este módulo permite elaborar términos y declaraciones para convertirlas desde
 fully named (@NTerm) a locally closed (@Term@) 
 -}
 
-module Elab ( elab, elabD, rmvSynTerm, styToNTy) where
+module Elab ( elab, elabD, rmvSynTerm, styToTy) where
 
 import Lang
 import Subst
@@ -28,7 +28,7 @@ convertType  = do
 rmvSynTerm :: MonadPCF m => SNTerm -> m (NTerm)
 rmvSynTerm (V i name) = return (V i name)  
 rmvSynTerm (Const i c) = return (Const i c)  
-rmvSynTerm (Lam i name ty t) = do nty <- styToNTy ty
+rmvSynTerm (Lam i name ty t) = do nty <- styToTy ty
                                   tTy <- rmvSynTerm t
                                   return (Lam i name nty tTy)  
 rmvSynTerm (App i t1 t2) = do t1Ty <- rmvSynTerm t1
@@ -36,8 +36,8 @@ rmvSynTerm (App i t1 t2) = do t1Ty <- rmvSynTerm t1
                               return (App i t1Ty t2Ty)
 rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
                                  return (UnaryOp i op tTy)
-rmvSynTerm (Fix i n1 sty1 n2 sty2 t) = do ty1 <- styToNTy sty1
-                                          ty2 <- styToNTy sty2  
+rmvSynTerm (Fix i n1 sty1 n2 sty2 t) = do ty1 <- styToTy sty1
+                                          ty2 <- styToTy sty2  
                                           tTy <- rmvSynTerm t
                                           return (Fix i n1 ty1 n2 ty2 tTy)
 rmvSynTerm (IfZ i c t1 t2) = do cTy <- rmvSynTerm c
@@ -50,21 +50,21 @@ rmvSynTerm (IfZ i c t1 t2) = do cTy <- rmvSynTerm c
 -- tipos sin sinonimos.
 rmvSynBinds :: MonadPCF m => [(MultiBind,STy)] -> m ([(MultiBind,Ty)])
 rmvSynBinds [] = return [] 
-rmvSynBinds ((ns,sty):bs) = do ty <- styToNTy sty
+rmvSynBinds ((ns,sty):bs) = do ty <- styToTy sty
                                bsTy <- rmvSynBinds bs  
                                return ((ns,ty):bsTy)
 -}
 
 -- Convierte un tipo con sinonimos en uno sin sinonimos.
-styToNTy :: MonadPCF m => STy -> m (NTy)
-styToNTy (DTy name) = do  mty <- lookupSynTy name
-                          case mty of 
-                            Nothing -> failPosPCF NoPos $ name ++" no existe el tipo"
-                            Just ty ->  return (NType name ty)
-styToNTy (SNatTy) = return (NType "Nat" NatTy)
-styToNTy (SFunTy sty1 sty2) = do (NType n1 ty1) <- (styToNTy sty1)
-                                 (NType n2 ty2) <- (styToNTy sty2)
-                                 return (NType ("(" ++ n1 ++ " -> " ++ n2 ++ ")") (FunTy ty1 ty2)) 
+styToTy :: MonadPCF m => STy -> m (Ty)
+styToTy (DTy name) = do mty <- lookupSynTy name
+                        case mty of 
+                           Nothing -> failPosPCF NoPos $ name ++" no existe el tipo"
+                           Just ty ->  return (NTy name ty)
+styToTy (SNatTy) = return NatTy
+styToTy (SFunTy sty1 sty2) = do ty1 <- (styToTy sty1)
+                                ty2 <- (styToTy sty2)
+                                return (FunTy ty1 ty2)
 
 
 binderExp :: [([Name], a)] -> [(Name, a)]

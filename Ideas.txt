@@ -29,7 +29,14 @@ SFix tiene [(Name, Ty)]. Como queramos.
 - Se podria guardar el termino completo detro de CFun o CFix? Ya que no cambiria ?.
 
 
+22/10:
+- eq en tipos? no deberian estar resueltos del todo? es la idea?
 
+- que es Module? que pasa con las declaraciones type?
+
+- esta bien el ifz?
+
+- ejemplos conflictivos que podrian romper lo ya hecho? (CEK sobre todo)
 
 
 
