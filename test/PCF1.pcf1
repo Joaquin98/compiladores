@@ -27,7 +27,12 @@ let rec gcd(n m : N):Nat =  ifz n then m else
 
 #let min:Nat = min' 0 
 
-let f:(Nat -> Nat) = fun(x:Nat) -> resta 3 x
+#let f:(Nat -> Nat) = fun(x:Nat) -> resta 3 x
 
 #let R:Nat = fix(r:Nat->(Nat->Nat->Nat)->Nat->Nat) (a:Nat) -> fun(b:Nat->Nat->Nat) -> fun(n:Nat) -> 
 #    ifz n then a else b (r a b (pred n)) (pred n)
+
+let x : Nat = 3
+let y : Nat = suma x 4
+
+let z : Nat = doble y

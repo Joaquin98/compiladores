@@ -34,14 +34,105 @@ import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
 
+
+
+-----------
+import Options.Applicative
+import Bytecompile
+
+data Mode = Interactive 
+          | Typecheck
+          | Bytecompile
+          | Run
+
+-- Parser de banderas
+parseMode :: Parser Mode
+parseMode = 
+     flag' Typecheck (long "typechek" <> short 't' <> help "Solo chequea tipos") 
+     <|>  flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compila a la BVM")
+     <|>  flag' Run (long "run" <> short 'r' <> help "Ehecuta bytecode en la BVM")
+     <|>  flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecuta de forma interactiva")
+
+-- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
+parseArgs :: Parser (Mode,[FilePath])
+parseArgs = (,) <$> parseMode <*> many (argument str (metavar "FILES..."))
+
+
+main :: IO () 
+main = execParser opts >>= go 
+       where 
+        opts = info (parseArgs <**> helper) (fullDesc <> progDesc "Compilador de PCF" <> header "Compilador de PCF de la materia Compiladores 2020")
+       
+        go :: (Mode,[FilePath]) -> IO ()
+        go (Interactive,files) = do runPCF (runInputT defaultSettings (main' files))
+                                    return ()
+        go (Typecheck,files) = undefined
+        go (Bytecompile,files) = do a <- runPCF (runInputT defaultSettings (compileToBytecode files))
+                                    case a of
+                                      Right (Just bytecode) -> do putStrLn $ show bytecode
+                                                                  bcWrite bytecode "a.bytecode"
+                                                                  return ()
+                                      _ -> return ()
+        go (Run,files) = do bytecode <- bcRead (head files)
+                            runBC bytecode
+                            return ()
+
+------------
+-- AGREGADO (NO COPIADO DEL APUNTE) 
+
+compileToBytecode :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe Bytecode)
+compileToBytecode (arg:args) = do lift $ catchErrors $ compileFile' arg
+          
+compileFile' ::  MonadPCF m => String -> m (Bytecode)
+compileFile' f = do
+    printPCF ("Abriendo "++f++"...")
+    let filename = reverse(dropWhile isSpace (reverse f))
+    x <- liftIO $ catch (readFile filename)
+               (\e -> do let err = show (e :: IOException)
+                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
+                         return "")
+    decls <- parseIO filename program x
+    mapM_ handleDecl' decls
+    s <- get
+    bytecode <- bytecompileModule (glb s)
+    return bytecode
+    
+{-
+declNames :: [Decl Term Ty] -> [Name]
+declNames ds = map (\d -> (declName d)) ds
+
+toLetIn :: [Decl Term Ty] -> Term
+toLetIn [l] =  (declBody l)
+toLetIn (l:ls) =  App (declPos l) (Lam (declPos l) (declName l) (declType l) (declBody l)) (toLetIn ls)
+-}
+
+handleDecl' :: MonadPCF m => SDecl SMNTerm MultiBind STy -> m ()
+handleDecl' decl = do let ed = elabD decl
+                      case ed of
+                       Right d -> handleTermDecl' d
+                       Left d -> handleTypeDecl d
+
+-- Maneja la ejecucion de las declaraciones de terminos.
+handleTermDecl' ::  MonadPCF m => Decl SMNTerm STy -> m ()
+handleTermDecl' (Decl p name sty termSty) = do
+        ty <- styToTy sty
+        tt <- elab termSty
+        tcDecl (Decl p name ty tt)  
+        addDecl (Decl p name ty tt) 
+
+
+
+-- FIN PARTE NUEVA 
+
+
 prompt :: String
 prompt = "PCF> "
-
+{-
 main :: IO ()
 main = do args <- getArgs
           runPCF (runInputT defaultSettings (main' args))
           return ()
-          
+-}        
 main' :: (MonadPCF m, MonadMask m) => [String] -> InputT m ()
 main' args = do
         lift $ catchErrors $ compileFiles args

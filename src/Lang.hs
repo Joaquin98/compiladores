@@ -79,6 +79,7 @@ data Tm info var ty =
   | UnaryOp info UnaryOp (Tm info var ty)
   | Fix info Name ty Name ty (Tm info var ty)
   | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
+  | LetIn info Name ty (Tm info var ty) (Tm info var ty)
   deriving (Show, Functor)
 
 

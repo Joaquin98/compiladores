@@ -11,12 +11,13 @@ Este módulo permite compilar módulos a la BVM. También provee una implementac
 para ejecutar bytecode.
 -}
 module Bytecompile
-  (Bytecode, runBC, bcWrite, bcRead) -- bytecompileModule
+  (Bytecode, runBC, bcWrite, bcRead, bytecompileModule) 
  where
 
 import Lang 
 import Subst
 import MonadPCF
+import Common
 
 import qualified Data.ByteString.Lazy as BS hiding (putStrLn)
 import Data.Binary ( Word32, Binary(put, get), decode, encode )
@@ -87,28 +88,47 @@ data Tm info var ty =
   deriving (Show, Functor)
 -}
 
+
 bc :: MonadPCF m => Term -> m Bytecode
-bc (V _ (Bound i))    = return [ACCESS,i] 
-bc (Const _ (CNat n)) = return [CONST,n]
-bc (Lam _ _ _ t)      = do tc <- bc t
-                           return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN])  
-bc (App _ f e)        = do fc <- bc f
-                           ec <- bc e
-                           return (fc ++ ec ++ [CALL]) 
-bc (UnaryOp _ Succ t) = do t' <- bc t
-                           return (t' ++ [SUCC])
-bc (UnaryOp _ Pred t) = do t' <- bc t
-                           return (t' ++ [PRED])
-bc (Fix _ _ _ _ _ t)  = do tc <- bc t
-                           return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN,FIX])  
-bc (IfZ _ c t1 t2)    = do t2c <- bc t2
-                           t1c <- bc t1
-                           cc  <- bc c
-                           return (t2c ++ t1c ++ cc ++ [IFZ])
+bc t = do bytecode <- bc' t
+          return(bytecode ++ [PRINT,STOP])
+
+bc' :: MonadPCF m => Term -> m Bytecode
+bc' (V _ (Bound i))     = return [ACCESS,i] 
+bc' (Const _ (CNat n))  = return [CONST,n]
+bc' (Lam _ _ _ t)       = do tc <- bc' t
+                             return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN])  
+bc' (App _ f e)         = do fc <- bc' f
+                             ec <- bc' e
+                             return (fc ++ ec ++ [CALL]) 
+bc' (UnaryOp _ Succ t)  = do t' <- bc' t
+                             return (t' ++ [SUCC])
+bc' (UnaryOp _ Pred t)  = do t' <- bc' t
+                             return (t' ++ [PRED])
+bc' (Fix _ _ _ _ _ t)   = do tc <- bc' t
+                             return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN,FIX])  
+bc' (IfZ _ c t1 t2)     = do t2c <- bc' t2
+                             t1c <- bc' t1
+                             cc  <- bc' c
+                             return (cc ++ [IFZ, (length t1c)+2] ++ t1c ++ [JUMP, (length t2c)] ++ t2c)
+bc' (LetIn _ _ _ t1 t2) = do t1c <- bc' t1
+                             t2c <- bc' t2
+                             return (t1c ++ [SHIFT] ++ t2c ++ [DROP])
+bc' x                   = do printPCF $ show x
+                             return ([10])
+
+--c IFZ (lt1) t1 JUMP (lt2) t2
+
+convertModule :: [Decl Term Ty] -> Term
+convertModule [d] = declBody d
+convertModule (d:ds) = 
+   (LetIn NoPos (declName d) (declType d) (declBody d) (close (declName d) (convertModule ds)))
 
 
---bytecompileModule :: MonadPCF m => Module -> m Bytecode
---bytecompileModule mod = error "implementame"
+bytecompileModule :: MonadPCF m => [Decl Term Ty] -> m Bytecode
+bytecompileModule [] = return ([10])
+bytecompileModule mod = do printPCF $  show (convertModule (reverse mod))
+                           bc (convertModule (reverse mod))
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo 
 bcWrite :: Bytecode -> FilePath -> IO ()
@@ -122,22 +142,36 @@ bcWrite bs filename = BS.writeFile filename (encode $ BC $ fromIntegral <$> bs)
 bcRead :: FilePath -> IO Bytecode
 bcRead filename = map fromIntegral <$> un32  <$> decode <$> BS.readFile filename
 
-runBC :: MonadPCF m => Bytecode -> m ()
+runBC :: Bytecode -> IO ()
 runBC c = runBC' c [] []
 
-runBC' :: MonadPCF m => Bytecode -> [Val] -> [Val] -> m ()
+runBC' :: Bytecode -> [Val] -> [Val] -> IO ()
 runBC' (STOP:c) _ _                   = return ()
-runBC' (PRINT:c) e (v:s)              = do printPCF (show v)
+runBC' (PRINT:c) e (v:s)              = do putStrLn (show v)
                                            runBC' c e s
 runBC' (ACCESS:i:c) e s               = runBC' c e ((e!!i):s)
 runBC' (CONST:n:c) e s                = runBC' c e ((I n):s)
 runBC' (FUNCTION:len:c) e s           = runBC' (drop len c) e ((Fun e c):s)
-runBC' (RETURN:c) e (v:(Fun re ra):s) = runBC' ra re (v:s)
+runBC' (RETURN:c) e (v:(RA re ra):s)  = runBC' ra re (v:s)
 runBC' (CALL:c) e (v:(Fun fe fc):s)   = runBC' fc (v:fe) ((RA e c):s)  
 runBC' (SUCC:c) e ((I n):s)           = runBC' c e ((I (n+1)):s)
 runBC' (PRED:c) e ((I 0):s)           = runBC' c e ((I 0):s) 
 runBC' (PRED:c) e ((I n):s)           = runBC' c e ((I (n-1)):s) 
-runBC' (IFZ:c) e ((I 0):v1:v2:s)      = runBC' c e (v1:s)
-runBC' (IFZ:c) e ((I n):v1:v2:s)      = runBC' c e (v2:s)
+runBC' (IFZ:lt1:c) e ((I 0):s)        = runBC' c e s
+runBC' (IFZ:lt1:c) e ((I n):s)        = runBC' (JUMP:lt1:c) e s
+runBC' (JUMP:lt:c) e s                = runBC' (drop lt c) e s
 runBC' (FIX:c) e ((Fun fe fc):s)      = let efix = (Fun efix fc):fe
                                         in runBC' c e ((Fun efix fc):s)
+runBC' (SHIFT:c) e (v:s)              = runBC' c (v:e) s
+runBC' (DROP:c) (v:e) s               = runBC' c e s
+runBC' c e s = do putStrLn (show c)
+                  return ()
+{-
+4 -> [12 ... ] [] [(Fun [] [3 0 6...])]
+12 -> [3 ...] [(Fun [] [3 0 6...])] []
+3 -> [2 ...] [(Fun [] [3 0 6...])] [(Fun [] [3 0 6...])]
+2 -> [5 ..] [(Fun [] [3 0 6...])] [1 : (Fun [] [3 0 6...])]
+5 -> [3 0 6 ... ] [1] [(RA [(Fun [] [3 0 6...])] [13 ...])]
+3 -> [6 ...] [1] [ 1 : (RA [(Fun [] [3 0 6...])] [13 ...])]
+3 -> [1 ...] [1] [ 2 : (RA [(Fun [] [3 0 6...])] [13 ...])]
+-}

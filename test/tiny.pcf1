@@ -1,0 +1,6 @@
+#let x : Nat = 3
+#let y : Nat = ifz 0 then x else 5
+
+let f (x : Nat) : Nat = succ x
+
+let z:Nat = f 1
