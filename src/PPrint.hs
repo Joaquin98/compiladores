@@ -37,20 +37,21 @@ openRename ns t =
 -- a términos fully named abriendo todos las variables de ligadura que va encontrando
 -- Debe tener cuidado de no abrir términos con nombres que ya fueron abiertos.
 openAll :: Term -> NTerm
-openAll (V p v) = case v of 
-      Bound i ->  V p $ "(Bound "++show i++")" --este caso no debería aparecer
-                                               --si el término es localmente cerrado
-      Free x -> V p x 
-openAll (Const p c) = Const p c
-openAll (Lam p x ty t) =
-    let ([x'], t') = openRename [x] t in
-    Lam p x' ty (openAll t')
-openAll (App p t u) = App p (openAll t) (openAll u)
-openAll (Fix p f fty x xty t) =
-    let ([f', x'], t') = openRename [f, x] t in
-    Fix p f' fty x' xty (openAll t')
-openAll (IfZ p c t e) = IfZ p (openAll c) (openAll t) (openAll e)
-openAll (UnaryOp i o t) = UnaryOp i o (openAll t)
+openAll (V p v)               = case v of 
+                                  Bound i ->  V p $ "(Bound "++show i++")" --este caso no debería aparecer
+                                                                           --si el término es localmente cerrado
+                                  Free x -> V p x 
+openAll (Const p c)           = Const p c
+openAll (Lam p x ty t)        = let ([x'], t') = openRename [x] t 
+                                in Lam p x' ty (openAll t')
+openAll (App p t u)           = App p (openAll t) (openAll u)
+openAll (Fix p f fty x xty t) = let ([f', x'], t') = openRename [f, x] t 
+                                in Fix p f' fty x' xty (openAll t')
+openAll (IfZ p c t e)         = IfZ p (openAll c) (openAll t) (openAll e)
+openAll (UnaryOp i o t)       = UnaryOp i o (openAll t)
+openAll (LetIn i n ty t t')   = let ([n'], tr) = openRename [n] t' 
+                                in LetIn i n' ty (openAll t) (openAll tr)
+
 
 -- | Pretty printer de nombres (Doc)
 name2doc :: Name -> Doc
@@ -62,10 +63,10 @@ ppName = id
 
 -- | Pretty printer para tipos (Doc)
 ty2doc :: Ty -> Doc
-ty2doc (NTy n ty) = text n
-ty2doc NatTy     = text "Nat"
+ty2doc (NTy n ty)              = text n
+ty2doc NatTy                   = text "Nat"
 ty2doc (FunTy x@(FunTy _ _) y) = sep [parens (ty2doc x),text "->",ty2doc y]
-ty2doc (FunTy x y) = sep [ty2doc x,text "->",ty2doc y] 
+ty2doc (FunTy x y)             = sep [ty2doc x,text "->",ty2doc y] 
 
 -- | Pretty printer para tipos (String)
 ppTy :: Ty -> String
@@ -95,35 +96,33 @@ t2doc :: Bool     -- Debe ser un átomo?
       -> Doc
 -- Uncomment to use the Show instance for STerm
 {- t2doc at x = text (show x) -}
-t2doc at (V _ x) = text x
-t2doc at (Const _ c) = c2doc c
-t2doc at (Lam _ v ty t) =
-  parenIf at $
-  sep [sep [text "fun", parens (sep [name2doc v,text ":",ty2doc ty]), text "->"], nest 2 (t2doc False t)]
+t2doc at (V _ x)               = text x
+t2doc at (Const _ c)           = c2doc c
+t2doc at (Lam _ v ty t)        = parenIf at $
+                                sep [ sep [ text "fun", 
+                                            parens (sep [name2doc v,text ":",ty2doc ty]), 
+                                            text "->"], 
+                                      nest 2 (t2doc False t)]
+t2doc at t@(App _ _ _)         = let (h, ts) = collectApp t
+                                 in parenIf at $
+                                 t2doc True h <+> sep (map (t2doc True) ts)
+t2doc at (Fix _ f fty x xty m) = parenIf at $
+                                 sep [ sep [ text "fix", binding2doc (f, fty), 
+                                           binding2doc (x, xty), text "->" ],
+                                       nest 2 (t2doc False m)]
+t2doc at (IfZ _ c t e)         = parenIf at $
+                                 sep [ text "ifz", nest 2 (t2doc False c)
+                                     , text "then", nest 2 (t2doc False t)
+                                     , text "else", nest 2 (t2doc False e) ]                           
+t2doc at (UnaryOp _ o t)       = parenIf at $
+                                 unary2doc o <+> t2doc True t
+t2doc at (LetIn i n ty t t')   = parenIf at $
+                                 sep [ text "let", binding2doc (n, ty),
+                                       text "=", nest 2 (t2doc False t),
+                                       text "in", nest 2 (t2doc False t') ]
 
-t2doc at t@(App _ _ _) =
-  let (h, ts) = collectApp t in
-  parenIf at $
-  t2doc True h <+> sep (map (t2doc True) ts)
-
-t2doc at (Fix _ f fty x xty m) =
-  parenIf at $
-  sep [ sep [ text "fix", binding2doc (f, fty), binding2doc (x, xty), text "->" ]
-      , nest 2 (t2doc False m)
-      ]
-
-t2doc at (IfZ _ c t e) =
-  parenIf at $
-  sep [ text "ifz", nest 2 (t2doc False c)
-      , text "then", nest 2 (t2doc False t)
-      , text "else", nest 2 (t2doc False e) ]
-
-t2doc at (UnaryOp _ o t) =
-  parenIf at $
-  unary2doc o <+> t2doc True t
-
-binding2doc (x, ty) =
-  parens (sep [name2doc x, text ":", ty2doc ty])
+binding2doc :: (Name, Ty) -> Doc
+binding2doc (x, ty) = parens (sep [name2doc x, text ":", ty2doc ty])
 
 -- | Pretty printing de términos (String)
 pp :: Term -> String

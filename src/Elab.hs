@@ -44,6 +44,10 @@ rmvSynTerm (IfZ i c t1 t2) = do cTy <- rmvSynTerm c
                                 t1Ty <- rmvSynTerm t1
                                 t2Ty <- rmvSynTerm t2
                                 return (IfZ i cTy t1Ty t2Ty)
+rmvSynTerm (LetIn i n ty t t') = do nty <- styToTy ty
+                                    tTy <- rmvSynTerm t
+                                    tTy' <- rmvSynTerm t'
+                                    return (LetIn i n nty tTy tTy')
 
 {-}
 -- Transforma una lista de binders con tipos con sinonimos en una con
@@ -134,7 +138,7 @@ desugar (SUnaryOpApp info op t) = UnaryOp info op (desugar t)
 desugar (SUnaryOp info op) = Lam info "x" SNatTy (UnaryOp info op (V info "x"))
 desugar (SFix info n1 t1 n2 t2 t) = Fix info n1 t1 n2 t2 (desugar t)
 desugar (SIfZ info c t1 t2) = IfZ info (desugar c) (desugar t1) (desugar t2)
-desugar (SLetIn info name [] ty t t') = App info (Lam info name ty (desugar t')) (desugar t)
+desugar (SLetIn info name [] ty t t') = LetIn info name ty (desugar t) (desugar t')
 desugar (SLetIn info name binds ty t t') = let funTy = (getFunType binds ty) 
                                                newTerm = SLetIn info name [] funTy (SLam info binds t) t'                                         
                                             in desugar newTerm
@@ -157,6 +161,7 @@ elabLN (App p h a)           = App p (elabLN h) (elabLN a)
 elabLN (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elabLN t))
 elabLN (IfZ p c t e)         = IfZ p (elabLN c) (elabLN t) (elabLN e)
 elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
+elabLN (LetIn p n ty t t')   = LetIn p n ty (elabLN t) (close n (elabLN t'))
 
 
 elab :: MonadPCF m => SMNTerm -> m Term

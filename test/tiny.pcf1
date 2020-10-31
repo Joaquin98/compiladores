@@ -4,3 +4,5 @@
 let f (x : Nat) : Nat = succ x
 
 let z:Nat = f 1
+
+let g (x:Nat):Nat = let y:Nat = 45 in f x

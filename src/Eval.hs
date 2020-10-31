@@ -54,5 +54,8 @@ eval (IfZ p c t e) = do
        Const _ (CNat _) -> eval e
        c' -> abort ("Error de tipo en runtime!")
 
+eval (LetIn i n ty t t') = do evt <- eval t
+                              eval (subst evt t')
+
 -- nada más para reducir
 eval t = return t

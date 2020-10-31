@@ -117,21 +117,23 @@ data Var =
 
 -- | Obtiene la info en la raíz del término.
 getInfo :: Tm info var ty -> info
-getInfo (V i _) = i
-getInfo (Const i _) = i
-getInfo (Lam i _ _ _) = i
-getInfo (App i _ _ ) = i
-getInfo (UnaryOp i _ _) = i
+getInfo (V i _)           = i
+getInfo (Const i _)       = i
+getInfo (Lam i _ _ _)     = i
+getInfo (App i _ _ )      = i
+getInfo (UnaryOp i _ _)   = i
 getInfo (Fix i _ _ _ _ _) = i
-getInfo (IfZ i _ _ _) = i
+getInfo (IfZ i _ _ _)     = i
+getInfo (LetIn i _ _ _ _) = i
 
 -- | Obtiene las variables libres de un término.
 freeVars :: Tm info Var ty -> [Name]
-freeVars (V _ (Free v))    = [v]
-freeVars (V _ _)           = []
-freeVars (Lam _ _ _ t)     = freeVars t
-freeVars (App _ l r)       = freeVars l ++ freeVars r
-freeVars (UnaryOp _ _ t)   = freeVars t
-freeVars (Fix _ _ _ _ _ t) = freeVars t
-freeVars (IfZ _ c t e)     = freeVars c ++ freeVars t ++ freeVars e
-freeVars (Const _ _)       = []
+freeVars (V _ (Free v))      = [v]
+freeVars (V _ _)             = []
+freeVars (Lam _ _ _ t)       = freeVars t
+freeVars (App _ l r)         = freeVars l ++ freeVars r
+freeVars (UnaryOp _ _ t)     = freeVars t
+freeVars (Fix _ _ _ _ _ t)   = freeVars t
+freeVars (IfZ _ c t e)       = freeVars c ++ freeVars t ++ freeVars e
+freeVars (Const _ _)         = []
+freeVars (LetIn _ n ty t t') = freeVars t ++ freeVars t'

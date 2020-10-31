@@ -60,6 +60,10 @@ tc (Fix p f fty x xty t) bs = do
          ty' <- tc t' ((x,xty):(f,fty):bs)
          expect cod ty' t'
          return fty
+tc (LetIn i n ty t t') bs = do tyt <- tc t bs
+                               expect tyt ty t
+                               tc (open n t') ((n,ty):bs)
+
 
 --Nat
 --NTy "hola" (Nat)
