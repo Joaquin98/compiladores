@@ -66,7 +66,7 @@ valToTerm (VClos (CFix [] f fty x xty t)) = Fix NoPos f fty x xty t
 valToTerm (VClos (CFix p f fty x xty t)) = replace p (Fix NoPos f fty x xty t)  
 
 replace :: Env -> Term -> Term
-replace p t = substN (map valToTerm p) t
+replace p t = substN (reverse (map valToTerm p)) t
 -- replace p t = substN (map valToTerm p) t
 
 --(fun x -> (fun y -> x + y) ) 3

@@ -3,9 +3,29 @@ type N = Nat
 
 type Pair = N -> N
 
+
+let rec suma(x y : N) : N = ifz y then x else suma (succ x) (pred y)
+
+let rec suman(x:N):N = ifz x then 0 else suma x (suman (pred x)) 
+
+let doble(x:N):N = suma x x 
+
+let sumard(x y:N)(f :N -> N):N = f (suma x y)
+
+let rec fib(x:N):N = ifz x then 1 else (ifz pred x then 1 else suma (fib (pred x)) (fib (pred (pred x))))  
+
+let rec resta(x y : N):Nat = ifz y then x else resta (pred x) (pred y)
+
+let rec mult(x y : N):Nat =ifz y then 0 else suma x (mult x (pred y))
+
+let rec exp(x y : N):Nat = ifz y then 1 else mult x (exp x (pred y))
+
+let rec fact (x:N):Nat =  ifz x then 1 else mult x (fact (pred x))
+
 # Make a pair
 #let rec mkp(x:N)(y:N):Pair = fun(c:N) -> ifz c then x else y
 let mkp(x:N)(y:N):Pair = fun(c:N) -> ifz c then x else y
+let mkp2(x:N)(y:N):Pair = fun(c:N) -> x 
 let asd2(x:N)(y:N):N = x 
 let asd(x y z:N):N = z
 # First
@@ -13,7 +33,7 @@ let f(p:Pair):N = p 0
 # Second
 let s(p:Pair):N = p 1
 
-# PCF> let a:Pair = mkp 3 4
+let a:Pair = mkp 3 4
 # PCF> let b:Pair = mkp 35 4
 # PCF> f a
 # 4 : N
@@ -21,3 +41,4 @@ let s(p:Pair):N = p 1
 # 3 : N
 # PCF> s b
 let r:N = let a:Pair = mkp 3 4 in f a
+let ff (p:Pair)(fu:Pair->N) : N = fu (mkp (fib (f p)) (fib (s p)))
