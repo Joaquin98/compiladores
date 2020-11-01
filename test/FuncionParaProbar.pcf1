@@ -1,0 +1,23 @@
+
+type N = Nat
+
+type Pair = N -> N
+
+# Make a pair
+#let rec mkp(x:N)(y:N):Pair = fun(c:N) -> ifz c then x else y
+let mkp(x:N)(y:N):Pair = fun(c:N) -> ifz c then x else y
+let asd2(x:N)(y:N):N = x 
+let asd(x y z:N):N = z
+# First
+let f(p:Pair):N = p 0
+# Second
+let s(p:Pair):N = p 1
+
+# PCF> let a:Pair = mkp 3 4
+# PCF> let b:Pair = mkp 35 4
+# PCF> f a
+# 4 : N
+# PCF> s a
+# 3 : N
+# PCF> s b
+let r:N = let a:Pair = mkp 3 4 in f a
