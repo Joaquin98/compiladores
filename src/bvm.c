@@ -48,8 +48,8 @@
 #define ACCESS   3
 #define FUNCTION 4
 #define CALL     5
-#define SUCC     6
-#define PRED     7
+#define ADD      6
+#define DIFF     7
 #define IFZ      8
 #define FIX      9
 #define STOP     10
@@ -57,7 +57,7 @@
 #define SHIFT    12
 #define DROP     13
 #define PRINT    14
-#define ADD      20
+//#define ADD      20
 
 #define CHUNK 4096
 
@@ -225,16 +225,22 @@ void run(code init_c)
 			break;
 		}
 
-		case SUCC: {
+		case ADD: {
 			/* Sucesor: ya tenemos el resultado del argumento
 			 * en la stack, le sumamos uno. */
-			s[-1].i++;
+			int n2 = (*--s).i;
+			int n1 = (*--s).i;
+			(*s++).i = n1 + n2;
 			break;
 		}
 
-		case PRED: {
-			if (s[-1].i > 0)
-				s[-1].i--;
+		case DIFF: {
+			int n2 = (*--s).i;
+			int n1 = (*--s).i;
+			if(n2 >= n1) 
+				(*s++).i = 0;
+			else
+				(*s++).i = n1 - n2;
 			break;
 		}
 

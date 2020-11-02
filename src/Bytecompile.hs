@@ -60,8 +60,10 @@ pattern CONST    = 2
 pattern ACCESS   = 3
 pattern FUNCTION = 4
 pattern CALL     = 5
-pattern SUCC     = 6
-pattern PRED     = 7
+--pattern SUCC     = 6
+pattern ADD      = 6
+--pattern PRED     = 7
+pattern DIFF     = 7
 pattern IFZ      = 8
 pattern FIX      = 9
 pattern STOP     = 10
@@ -101,10 +103,16 @@ bc' (Lam _ _ _ t)       = do tc <- bc' t
 bc' (App _ f e)         = do fc <- bc' f
                              ec <- bc' e
                              return (fc ++ ec ++ [CALL]) 
-bc' (UnaryOp _ Succ t)  = do t' <- bc' t
-                             return (t' ++ [SUCC])
-bc' (UnaryOp _ Pred t)  = do t' <- bc' t
-                             return (t' ++ [PRED])
+--bc' (UnaryOp _ Succ t)  = do t' <- bc' t
+--                             return (t' ++ [SUCC])
+--bc' (UnaryOp _ Pred t)  = do t' <- bc' t
+--                             return (t' ++ [PRED])
+bc' (BinaryOp _ Add t1 t2) = do t1' <- bc' t1
+                                t2' <- bc' t2
+                                return (t1'++t2'++[ADD])
+bc' (BinaryOp _ Diff t1 t2) = do t1' <- bc' t1
+                                 t2' <- bc' t2
+                                 return (t1'++t2'++[DIFF])
 bc' (Fix _ _ _ _ _ t)   = do tc <- bc' t
                              return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN,FIX])  
 bc' (IfZ _ c t1 t2)     = do t2c <- bc' t2
@@ -154,9 +162,8 @@ runBC' (CONST:n:c) e s                = runBC' c e ((I n):s)
 runBC' (FUNCTION:len:c) e s           = runBC' (drop len c) e ((Fun e c):s)
 runBC' (RETURN:c) e (v:(RA re ra):s)  = runBC' ra re (v:s)
 runBC' (CALL:c) e (v:(Fun fe fc):s)   = runBC' fc (v:fe) ((RA e c):s)  
-runBC' (SUCC:c) e ((I n):s)           = runBC' c e ((I (n+1)):s)
-runBC' (PRED:c) e ((I 0):s)           = runBC' c e ((I 0):s) 
-runBC' (PRED:c) e ((I n):s)           = runBC' c e ((I (n-1)):s) 
+runBC' (ADD:c) e ((I n2):(I n1):s)    = runBC' c e ((I (n1+n2)):s)
+runBC' (DIFF:c) e ((I n2):(I n1):s)   = runBC' c e ((I (max 0 (n1-n2))):s) 
 runBC' (IFZ:lt1:c) e ((I 0):s)        = runBC' c e s
 runBC' (IFZ:lt1:c) e ((I n):s)        = runBC' (JUMP:lt1:c) e s
 runBC' (JUMP:lt:c) e s                = runBC' (drop lt c) e s

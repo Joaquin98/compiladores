@@ -48,7 +48,8 @@ openAll (App p t u)           = App p (openAll t) (openAll u)
 openAll (Fix p f fty x xty t) = let ([f', x'], t') = openRename [f, x] t 
                                 in Fix p f' fty x' xty (openAll t')
 openAll (IfZ p c t e)         = IfZ p (openAll c) (openAll t) (openAll e)
-openAll (UnaryOp i o t)       = UnaryOp i o (openAll t)
+--openAll (UnaryOp i o t)       = UnaryOp i o (openAll t)
+openAll (BinaryOp i o t1 t2)  = BinaryOp i o (openAll t1) (openAll t2)
 openAll (LetIn i n ty t t')   = let ([n'], tr) = openRename [n] t' 
                                 in LetIn i n' ty (openAll t) (openAll tr)
 
@@ -78,6 +79,10 @@ c2doc (CNat n) = text (show n)
 unary2doc :: UnaryOp -> Doc
 unary2doc Succ = text "succ"
 unary2doc Pred = text "pred"
+
+binary2doc :: BinaryOp -> Doc
+binary2doc Add  = text "+"
+binary2doc Diff = text "-"
 
 collectApp :: NTerm -> (NTerm, [NTerm])
 collectApp t = go [] t where
@@ -114,8 +119,12 @@ t2doc at (IfZ _ c t e)         = parenIf at $
                                  sep [ text "ifz", nest 2 (t2doc False c)
                                      , text "then", nest 2 (t2doc False t)
                                      , text "else", nest 2 (t2doc False e) ]                           
+{-
 t2doc at (UnaryOp _ o t)       = parenIf at $
                                  unary2doc o <+> t2doc True t
+-}
+t2doc at (BinaryOp _ o t1 t2)  = parenIf at $
+                                 t2doc True t1 <+> binary2doc o <+> t2doc True t2
 t2doc at (LetIn i n ty t t')   = parenIf at $
                                  sep [ text "let", binding2doc (n, ty),
                                        text "=", nest 2 (t2doc False t),

@@ -26,28 +26,31 @@ convertType  = do
 
 -- Reemplaza los sinonimos de tipos en un termino por lo que representa. 
 rmvSynTerm :: MonadPCF m => SNTerm -> m (NTerm)
-rmvSynTerm (V i name) = return (V i name)  
-rmvSynTerm (Const i c) = return (Const i c)  
-rmvSynTerm (Lam i name ty t) = do nty <- styToTy ty
-                                  tTy <- rmvSynTerm t
-                                  return (Lam i name nty tTy)  
-rmvSynTerm (App i t1 t2) = do t1Ty <- rmvSynTerm t1
-                              t2Ty <- rmvSynTerm t2
-                              return (App i t1Ty t2Ty)
-rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
-                                 return (UnaryOp i op tTy)
+rmvSynTerm (V i name)                = return (V i name)  
+rmvSynTerm (Const i c)               = return (Const i c)  
+rmvSynTerm (Lam i name ty t)         = do nty <- styToTy ty
+                                          tTy <- rmvSynTerm t
+                                          return (Lam i name nty tTy)  
+rmvSynTerm (App i t1 t2)             = do t1Ty <- rmvSynTerm t1
+                                          t2Ty <- rmvSynTerm t2
+                                          return (App i t1Ty t2Ty)
+--rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
+--                                 return (UnaryOp i op tTy)
+rmvSynTerm (BinaryOp i op t1 t2)     = do t1Ty <- rmvSynTerm t1
+                                          t2Ty <- rmvSynTerm t2
+                                          return (BinaryOp i op t1Ty t2Ty)                                   
 rmvSynTerm (Fix i n1 sty1 n2 sty2 t) = do ty1 <- styToTy sty1
                                           ty2 <- styToTy sty2  
                                           tTy <- rmvSynTerm t
                                           return (Fix i n1 ty1 n2 ty2 tTy)
-rmvSynTerm (IfZ i c t1 t2) = do cTy <- rmvSynTerm c
-                                t1Ty <- rmvSynTerm t1
-                                t2Ty <- rmvSynTerm t2
-                                return (IfZ i cTy t1Ty t2Ty)
-rmvSynTerm (LetIn i n ty t t') = do nty <- styToTy ty
-                                    tTy <- rmvSynTerm t
-                                    tTy' <- rmvSynTerm t'
-                                    return (LetIn i n nty tTy tTy')
+rmvSynTerm (IfZ i c t1 t2)           = do cTy <- rmvSynTerm c
+                                          t1Ty <- rmvSynTerm t1
+                                          t2Ty <- rmvSynTerm t2
+                                          return (IfZ i cTy t1Ty t2Ty)
+rmvSynTerm (LetIn i n ty t t')       = do nty <- styToTy ty
+                                          tTy <- rmvSynTerm t
+                                          tTy' <- rmvSynTerm t'
+                                          return (LetIn i n nty tTy tTy')
 
 {-}
 -- Transforma una lista de binders con tipos con sinonimos en una con
@@ -61,19 +64,19 @@ rmvSynBinds ((ns,sty):bs) = do ty <- styToTy sty
 
 -- Convierte un tipo con sinonimos en uno sin sinonimos.
 styToTy :: MonadPCF m => STy -> m (Ty)
-styToTy (DTy name) = do mty <- lookupSynTy name
-                        case mty of 
-                           Nothing -> failPosPCF NoPos $ name ++" no existe el tipo"
-                           Just ty ->  return (NTy name ty)
-styToTy (SNatTy) = return NatTy
+styToTy (DTy name)         = do mty <- lookupSynTy name
+                                case mty of 
+                                    Nothing -> failPosPCF NoPos $ name ++" no existe el tipo"
+                                    Just ty ->  return (NTy name ty)
+styToTy (SNatTy)           = return NatTy
 styToTy (SFunTy sty1 sty2) = do ty1 <- (styToTy sty1)
                                 ty2 <- (styToTy sty2)
                                 return (FunTy ty1 ty2)
 
 
 binderExp :: [([Name], a)] -> [(Name, a)]
-binderExp [] = []
-binderExp (([x], t):bs) = (x, t): (binderExp bs)
+binderExp []             = []
+binderExp (([x], t):bs)  = (x, t): (binderExp bs)
 binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
 
 expBindersD :: SDecl SMNTerm MultiBind STy -> SDecl SMNTerm UnaryBind STy
@@ -113,6 +116,7 @@ expBinders (SLam info binds t) = SLam info (binderExp binds) (expBinders t)
 expBinders (SApp info t1 t2) = SApp info (expBinders t1) (expBinders t2)
 expBinders (SUnaryOpApp info op t) = SUnaryOpApp info op (expBinders t)
 expBinders (SUnaryOp info unaryOp) = SUnaryOp info unaryOp  
+expBinders (SBinaryOp info binaryop t1 t2) = SBinaryOp info binaryop (expBinders t1) (expBinders t2) 
 expBinders (SFix info n1 t1 n2 t2 t) = SFix info n1 t1 n2 t2 (expBinders t)
 expBinders (SIfZ info c t1 t2) = SIfZ info (expBinders c) (expBinders t1) (expBinders t2)
 expBinders (SLetIn info name binds ty t t') = SLetIn info name (binderExp binds) ty (expBinders t) (expBinders t')
@@ -129,13 +133,18 @@ getFunType [(n, t)] ty = SFunTy t ty
 getFunType ((n, t):bs) ty = SFunTy t (getFunType bs ty)
 
 
+unaryToBinary :: UnaryOp -> BinaryOp
+unaryToBinary Succ = Add
+unaryToBinary Pred = Diff 
+
 desugar :: SUNTerm -> SNTerm
 desugar (SV info var) = V info var 
 desugar (SConst info c) = Const info c 
 desugar (SLam info binds t) = foldr (\(name,ty) ti -> Lam info name ty ti) (desugar t) binds 
 desugar (SApp info t1 t2) = App info (desugar t1) (desugar t2)
-desugar (SUnaryOpApp info op t) = UnaryOp info op (desugar t)
-desugar (SUnaryOp info op) = Lam info "x" SNatTy (UnaryOp info op (V info "x"))
+desugar (SUnaryOpApp info op t) = BinaryOp info (unaryToBinary op) (desugar t) (Const info (CNat 1))
+desugar (SUnaryOp info op) = Lam info "x" SNatTy (desugar (SUnaryOpApp info op (SV info "x")))
+desugar (SBinaryOp info op t1 t2) = BinaryOp info op (desugar t1) (desugar t2) 
 desugar (SFix info n1 t1 n2 t2 t) = Fix info n1 t1 n2 t2 (desugar t)
 desugar (SIfZ info c t1 t2) = IfZ info (desugar c) (desugar t1) (desugar t2)
 desugar (SLetIn info name [] ty t t') = LetIn info name ty (desugar t) (desugar t')
@@ -160,7 +169,8 @@ elabLN (Lam p v ty t)        = Lam p v ty (close v (elabLN t))
 elabLN (App p h a)           = App p (elabLN h) (elabLN a)
 elabLN (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elabLN t))
 elabLN (IfZ p c t e)         = IfZ p (elabLN c) (elabLN t) (elabLN e)
-elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
+--elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
+elabLN (BinaryOp i o t1 t2)  = BinaryOp i o (elabLN t1)(elabLN t2)
 elabLN (LetIn p n ty t t')   = LetIn p n ty (elabLN t) (close n (elabLN t'))
 
 

@@ -30,7 +30,7 @@ lexer = Tok.makeTokenParser $
          commentLine    = "#",
          reservedNames = ["let", "fun", "fix", "then", "else", 
                           "succ", "pred", "ifz", "Nat", "in", "rec", "type"],
-         reservedOpNames = ["->",":","="]
+         reservedOpNames = ["->",":","=","+","-"]
         }
 
 whiteSpace :: P ()
@@ -99,7 +99,21 @@ unaryOpApp = do
      , ("pred", SUnaryOpApp i Pred)
     ]
 
-
+binaryOp :: P SMNTerm
+binaryOp = do
+  i <- getPos
+  foldr (\(w, r) rest -> try (do 
+                                 t1 <- atom
+                                 reservedOp w
+                                 t2 <- atom
+                                 return (r t1 t2))
+                                 <|> rest) parserZero (mapping i)
+  where
+   mapping i = [
+       ("+", SBinaryOp i Add)
+     , ("-", SBinaryOp i Diff)
+    ]
+    
 unaryOpNApp :: P SMNTerm
 unaryOpNApp = do
   i <- getPos
@@ -214,7 +228,7 @@ letRec = do i <- getPos
 -}
 -- | Parser de términos
 tm :: P SMNTerm
-tm = app <|> lam <|> ifz <|> unaryOp <|> fix <|> letIn 
+tm = binaryOp <|> app <|> lam <|> ifz <|> unaryOp <|> fix <|> letIn 
 
 -- | Parser de declaraciones
 declLet :: P (SDecl SMNTerm MultiBind STy)

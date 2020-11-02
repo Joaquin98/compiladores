@@ -41,6 +41,9 @@ data Const = CNat Int
 data UnaryOp = Succ | Pred
   deriving Show
 
+data BinaryOp = Add | Diff
+  deriving Show
+
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a b =
     Decl { declPos :: Pos, declName :: Name, declType:: b, declBody :: a}
@@ -76,7 +79,8 @@ data Tm info var ty =
   | Const info Const
   | Lam info Name ty (Tm info var ty)
   | App info (Tm info var ty) (Tm info var ty)
-  | UnaryOp info UnaryOp (Tm info var ty)
+--  | UnaryOp info UnaryOp (Tm info var ty)
+  | BinaryOp info BinaryOp (Tm info var ty) (Tm info var ty)
   | Fix info Name ty Name ty (Tm info var ty)
   | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
   | LetIn info Name ty (Tm info var ty) (Tm info var ty)
@@ -89,7 +93,8 @@ data STm info var bind ty =
   | SLam info [(bind,ty)] (STm info var bind ty)
   | SApp info (STm info var bind ty) (STm info var bind ty)
   | SUnaryOpApp info UnaryOp (STm info var bind ty)
-  | SUnaryOp info UnaryOp 
+  | SUnaryOp info UnaryOp
+  | SBinaryOp info BinaryOp (STm info var bind ty) (STm info var bind ty) 
   | SFix info Name ty Name ty (STm info var bind ty)
   | SIfZ info (STm info var bind ty) (STm info var bind ty) (STm info var bind ty)
   -- | SLetIn info Name ty (STm info var bind ty) (STm info var bind ty)
@@ -121,7 +126,8 @@ getInfo (V i _)           = i
 getInfo (Const i _)       = i
 getInfo (Lam i _ _ _)     = i
 getInfo (App i _ _ )      = i
-getInfo (UnaryOp i _ _)   = i
+--getInfo (UnaryOp i _ _)   = i
+getInfo (BinaryOp i _ _ _)= i
 getInfo (Fix i _ _ _ _ _) = i
 getInfo (IfZ i _ _ _)     = i
 getInfo (LetIn i _ _ _ _) = i
@@ -132,7 +138,8 @@ freeVars (V _ (Free v))      = [v]
 freeVars (V _ _)             = []
 freeVars (Lam _ _ _ t)       = freeVars t
 freeVars (App _ l r)         = freeVars l ++ freeVars r
-freeVars (UnaryOp _ _ t)     = freeVars t
+--freeVars (UnaryOp _ _ t)     = freeVars t
+freeVars (BinaryOp _ _ t t') = freeVars t ++ freeVars t'
 freeVars (Fix _ _ _ _ _ t)   = freeVars t
 freeVars (IfZ _ c t e)       = freeVars c ++ freeVars t ++ freeVars e
 freeVars (Const _ _)         = []

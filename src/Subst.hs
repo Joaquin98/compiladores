@@ -29,7 +29,8 @@ varChanger local bound t = go 0 t where
   go n (Fix p f fty x xty t) = Fix p f fty x xty (go (n+2) t)
   go n (IfZ p c t e) = IfZ p (go n c) (go n t) (go n e)
   go n t@(Const _ _) = t
-  go n (UnaryOp p op t) = UnaryOp p op (go n t)
+  --go n (UnaryOp p op t) = UnaryOp p op (go n t)
+  go n (BinaryOp p op t1 t2) = BinaryOp p op (go n t1) (go n t2)
   go n (LetIn p v ty t1 t2) = LetIn p v ty (go n t1) (go (n+1) t2)
 
 -- `openN [nn,..,n0] t` reemplaza las primeras (n+1) variables ligadas
