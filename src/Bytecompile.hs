@@ -71,6 +71,7 @@ pattern JUMP     = 11
 pattern SHIFT    = 12
 pattern DROP     = 13
 pattern PRINT    = 14
+pattern TAILCALL = 15
 
 type Env = [Val]
 data Val = I Int | Fun Env Bytecode | RA Env Bytecode deriving (Show)
@@ -95,11 +96,25 @@ bc :: MonadPCF m => Term -> m Bytecode
 bc t = do bytecode <- bc' t
           return(bytecode ++ [PRINT,STOP])
 
+tcompile :: MonadPCF m => Term -> m Bytecode
+tcompile (App _ f e)         = do fc <- bc' f
+                                  ec <- bc' e
+                                  return (fc ++ ec ++ [TAILCALL]) 
+tcompile (IfZ _ c t1 t2)     = do t2c <- tcompile t2
+                                  t1c <- tcompile t1
+                                  cc  <- bc' c
+                                  return (cc ++ [IFZ, (length t1c)+2] ++ t1c ++ [JUMP, (length t2c)] ++ t2c)
+tcompile (LetIn _ _ _ t1 t2) = do t1c <- bc' t1
+                                  t2c <- tcompile t2
+                                  return (t1c ++ [SHIFT] ++ t2c )                            
+tcompile t                   = do tc <- bc' t
+                                  return(tc ++ [RETURN])         
+
 bc' :: MonadPCF m => Term -> m Bytecode
 bc' (V _ (Bound i))     = return [ACCESS,i] 
 bc' (Const _ (CNat n))  = return [CONST,n]
-bc' (Lam _ _ _ t)       = do tc <- bc' t
-                             return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN])  
+bc' (Lam _ _ _ t)       = do tc <- tcompile t
+                             return ([FUNCTION, (length tc)] ++ tc)  
 bc' (App _ f e)         = do fc <- bc' f
                              ec <- bc' e
                              return (fc ++ ec ++ [CALL]) 
@@ -154,25 +169,26 @@ runBC :: Bytecode -> IO ()
 runBC c = runBC' c [] []
 
 runBC' :: Bytecode -> [Val] -> [Val] -> IO ()
-runBC' (STOP:c) _ _                   = return ()
-runBC' (PRINT:c) e (v:s)              = do putStrLn (show v)
-                                           runBC' c e s
-runBC' (ACCESS:i:c) e s               = runBC' c e ((e!!i):s)
-runBC' (CONST:n:c) e s                = runBC' c e ((I n):s)
-runBC' (FUNCTION:len:c) e s           = runBC' (drop len c) e ((Fun e c):s)
-runBC' (RETURN:c) e (v:(RA re ra):s)  = runBC' ra re (v:s)
-runBC' (CALL:c) e (v:(Fun fe fc):s)   = runBC' fc (v:fe) ((RA e c):s)  
-runBC' (ADD:c) e ((I n2):(I n1):s)    = runBC' c e ((I (n1+n2)):s)
-runBC' (DIFF:c) e ((I n2):(I n1):s)   = runBC' c e ((I (max 0 (n1-n2))):s) 
-runBC' (IFZ:lt1:c) e ((I 0):s)        = runBC' c e s
-runBC' (IFZ:lt1:c) e ((I n):s)        = runBC' (JUMP:lt1:c) e s
-runBC' (JUMP:lt:c) e s                = runBC' (drop lt c) e s
-runBC' (FIX:c) e ((Fun fe fc):s)      = let efix = (Fun efix fc):fe
-                                        in runBC' c e ((Fun efix fc):s)
-runBC' (SHIFT:c) e (v:s)              = runBC' c (v:e) s
-runBC' (DROP:c) (v:e) s               = runBC' c e s
-runBC' c e s = do putStrLn (show c)
-                  return ()
+runBC' (STOP:c) _ _                     = return ()
+runBC' (PRINT:c) e (v:s)                = do putStrLn (show v)
+                                             runBC' c e s
+runBC' (ACCESS:i:c) e s                 = runBC' c e ((e!!i):s)
+runBC' (CONST:n:c) e s                  = runBC' c e ((I n):s)
+runBC' (FUNCTION:len:c) e s             = runBC' (drop len c) e ((Fun e c):s)
+runBC' (RETURN:c) e (v:(RA re ra):s)    = runBC' ra re (v:s)
+runBC' (CALL:c) e (v:(Fun fe fc):s)     = runBC' fc (v:fe) ((RA e c):s)  
+runBC' (TAILCALL:c) e (v:(Fun fe fc):s) = runBC' fc (v:fe) s  
+runBC' (ADD:c) e ((I n2):(I n1):s)      = runBC' c e ((I (n1+n2)):s)
+runBC' (DIFF:c) e ((I n2):(I n1):s)     = runBC' c e ((I (max 0 (n1-n2))):s) 
+runBC' (IFZ:lt1:c) e ((I 0):s)          = runBC' c e s
+runBC' (IFZ:lt1:c) e ((I n):s)          = runBC' (JUMP:lt1:c) e s
+runBC' (JUMP:lt:c) e s                  = runBC' (drop lt c) e s
+runBC' (FIX:c) e ((Fun fe fc):s)        = let efix = (Fun efix fc):fe
+                                          in runBC' c e ((Fun efix fc):s)
+runBC' (SHIFT:c) e (v:s)                = runBC' c (v:e) s
+runBC' (DROP:c) (v:e) s                 = runBC' c e s
+runBC' c e s                            = do putStrLn (show c)
+                                             return ()
 {-
 4 -> [12 ... ] [] [(Fun [] [3 0 6...])]
 12 -> [3 ...] [(Fun [] [3 0 6...])] []

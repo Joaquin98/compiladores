@@ -57,6 +57,7 @@
 #define SHIFT    12
 #define DROP     13
 #define PRINT    14
+#define TAILCALL 15
 //#define ADD      20
 
 #define CHUNK 4096
@@ -272,6 +273,25 @@ void run(code init_c)
 
 			struct clo ret_addr = { .clo_env = e, .clo_body = c };
 			(*s++).clo = ret_addr;
+
+			/* Cambiamos al entorno de la clausura, agregando arg */
+			e = env_push(fun.clo.clo_env, arg);
+
+			/* Saltamos! */
+			c = fun.clo.clo_body;
+
+			break;
+		}
+				
+		case TAILCALL: {
+			/* Aplicación: tenemos en la stack un argumento
+			 * y una función. La función debe ser una clausura.
+			 * La idea es saltar a la clausura extendiendo su
+			 * entorno con el valor de la aplicación, pero
+			 * tenemos que guardar nuestra dirección de retorno.
+			 */
+			value arg = *--s;
+			value fun = *--s;
 
 			/* Cambiamos al entorno de la clausura, agregando arg */
 			e = env_push(fun.clo.clo_env, arg);
