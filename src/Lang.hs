@@ -120,6 +120,23 @@ data Var =
   | Free Name
   deriving Show
 
+
+data IrTm = IrVar Name
+          | IrCall IrTm [IrTm]
+          | IrConst Const
+          | IrBinaryOp Binary IrTm IrTm
+          | IrLet Name IrTm IrTm
+          | IrIfZ IrTm IrTm IrTm
+          | MkClousure Name [IrTm]
+          | IrAccess IrTm Int
+data Decl a b =
+    Decl { declPos :: Pos, declName :: Name, declType:: b, declBody :: a}
+  deriving (Show,Functor)
+
+data IrDecl = IrVal { irDeclName :: Name , irDeclDef :: IrTm }
+            | IrFun { irDeclName :: Name, irDeclArity :: Int, irDeclArgNames :: [Name], irDeclBody :: IrTm }
+    deriving (Show)
+
 -- | Obtiene la info en la raíz del término.
 getInfo :: Tm info var ty -> info
 getInfo (V i _)           = i

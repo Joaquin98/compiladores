@@ -40,9 +40,29 @@ SFix tiene [(Name, Ty)]. Como queramos.
 
 
 
+02/11:
 
+- DIFF y ADD o solo ADD?
+Está bien que estén ambas funciones.
+- Pregunta de reemplazo.
+No es posible hacerlo tan simple porque el 5 representa la llamada CALL
+pero también podría ser el indice del ACCESS. Con lo cual se podría hacer 
+pero analizando bien el código. Otro problema que puede generar es que 
+por ejemplo la función tiene la longitud de su código al reemplazar 2 
+instrucciones por 1 la longitud de la función sería incorrecta.
+- Mostrar y pedir ejemplo.
+La memoria sigue siendo mucha incluso en el caso del TAILCALL porque 
+en la lista del entorno no se libera la memoria.
 
+16/11:
 
+- Term -> IrTm: Que pasa con el nombre de las variables, porque el 
+Term tiene índices y IrTm necesita de FullyNames.
+
+- Que devuelve [[f]] es la lista de [IrDecl] u otra cosa?
+
+- StateT Int: Se lleva la cuenta de los nombres de variables frescos
+dentro de un term, pero cuando se pasa a otro se pierde?
 
 
 
