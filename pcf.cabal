@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 453e8effbf3207b066067a760cda12e062398653a0ab02a53f9c0246ceb6d3ae
+-- hash: c0afbf92d932639e9636693fe98df954e5e41475f5e6517e479881dcfe7fe4c1
 
 name:           pcf
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Bytecompile
       CEK
+      Closures
       Common
       Elab
       Errors

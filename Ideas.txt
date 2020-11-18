@@ -69,9 +69,16 @@ dentro de un term, pero cuando se pasa a otro se pierde?
 
 
 
+Importa el orden?
 
-
-
+[IrVal {irDeclName = "x", irDeclDef = IrConst (CNat 1)},
+IrVal {irDeclName = "y", irDeclDef = IrBinaryOp Add (IrConst (CNat 2)) (IrVar "x")},
+IrFun {irDeclName = "__7", irDeclArity = 2, irDeclArgNames = ["__clo8","__y6"], irDeclBody = IrBinaryOp Add (IrConst (CNat 1)) (IrVar "x")},
+IrVal {irDeclName = "f", irDeclDef = MkClosure "__7" []},
+IrFun {irDeclName = "__4", irDeclArity = 2, irDeclArgNames = ["__clo5","__y3"], irDeclBody = IrBinaryOp Add (IrVar "__x0") (IrVar "__y3")},
+IrFun {irDeclName = "__1", irDeclArity = 2, irDeclArgNames = ["__clo2","__x0"], irDeclBody = MkClosure "__4" []},
+IrVal {irDeclName = "suma", irDeclDef = MkClosure "__1" []},
+IrVal {irDeclName = "suma5", irDeclDef = IrCall (IrAccess (IrVar "suma") 0) [IrVar "suma",IrConst (CNat 5)]}]
 
 
 

@@ -33,7 +33,7 @@ import CEK (eval)
 import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
-
+import Closures (runCC)
 
 
 -----------
@@ -44,12 +44,14 @@ data Mode = Interactive
           | Typecheck
           | Bytecompile
           | Run
+          | ClosureConvert
 
 -- Parser de banderas
 parseMode :: Parser Mode
 parseMode = 
      flag' Typecheck (long "typechek" <> short 't' <> help "Solo chequea tipos") 
      <|>  flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compila a la BVM")
+     <|>  flag' ClosureConvert (long "cc" <> help "Convierte a clausuras")
      <|>  flag' Run (long "run" <> short 'r' <> help "Ehecuta bytecode en la BVM")
      <|>  flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecuta de forma interactiva")
 
@@ -76,6 +78,27 @@ main = execParser opts >>= go
         go (Run,files) = do bytecode <- bcRead (head files)
                             runBC bytecode
                             return ()
+        go (ClosureConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToClosures files))
+                                       case a of
+                                         Right (Just closures) -> do putStrLn $ show closures
+                  
+                  
+compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [IrDecl])
+compileToClosures (arg:args) = do lift $ catchErrors $ makeClosures arg
+          
+makeClosures ::  MonadPCF m => String -> m ([IrDecl])
+makeClosures f = do
+    printPCF ("Abriendo "++f++"...")
+    let filename = reverse(dropWhile isSpace (reverse f))
+    x <- liftIO $ catch (readFile filename)
+               (\e -> do let err = show (e :: IOException)
+                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
+                         return "")
+    decls <- parseIO filename program x
+    mapM_ handleDecl' decls
+    s <- get
+    let closures = runCC (glb s) in
+      return $ reverse closures
 
 ------------
 -- AGREGADO (NO COPIADO DEL APUNTE) 
