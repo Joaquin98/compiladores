@@ -33,7 +33,7 @@ import CEK (eval)
 import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
-import Closures (runCC)
+import Closures (runCC,printIrDecls)
 
 
 -----------
@@ -80,7 +80,7 @@ main = execParser opts >>= go
                             return ()
         go (ClosureConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToClosures files))
                                        case a of
-                                         Right (Just closures) -> do putStrLn $ show closures
+                                         Right (Just closures) -> do printIrDecls closures
                   
                   
 compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [IrDecl])
@@ -98,7 +98,7 @@ makeClosures f = do
     mapM_ handleDecl' decls
     s <- get
     let closures = runCC (glb s) in
-      return $ reverse closures
+      return $ closures
 
 ------------
 -- AGREGADO (NO COPIADO DEL APUNTE) 

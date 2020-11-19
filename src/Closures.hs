@@ -1,12 +1,31 @@
-module Closures (runCC) where
+module Closures (runCC,printIrDecls) where
 import Lang
 import Control.Monad.Writer
 import Control.Monad.State.Lazy
 import Subst
+import Data.List
+
+-- AGREGADO --
+---------------------------------------------------------------------------
+freeVars' :: Term -> [Name]
+freeVars' t = filter (\name -> isPrefixOf "__" name) (freeVars t)
+
+namesToIrTms :: [Name] -> [IrTm]
+namesToIrTms = map (\name -> IrVar name)
+
+printIrDecls :: [IrDecl] -> IO ()
+printIrDecls []     = putStrLn ""
+printIrDecls (d:ds) = do putStrLn $ show(d)
+                         printIrDecls ds
+---------------------------------------------------------------------------
+
 
 makeTerm :: Name -> [Name] -> IrTm -> Int -> IrTm
 makeTerm closN [] t n         = t 
 makeTerm closN (var:vars) t n = IrLet var (IrAccess (IrVar closN) n) (makeTerm closN vars t (n+1)) 
+
+makeTermR :: Name -> [Name] -> IrTm -> Int -> IrTm
+makeTermR closN (f:vars) t n = IrLet f (IrVar closN) (makeTerm closN vars t n)
 
 closureConvert :: Term -> StateT Int (Writer [IrDecl]) IrTm
 closureConvert (V _ (Free n))          = return $ IrVar n
@@ -16,14 +35,18 @@ closureConvert (Lam _ name _ t)        =
        modify (+3)
        let varName = "__" ++ name ++ show(n)
            funName = "__" ++ show(n+1)
-           cloName = "__clo" ++ show(n+2) in 
+           cloName = "__clo" ++ show(n+2) 
+           fVars = freeVars' t in 
         do t' <- closureConvert (open varName t)
-           tell $ [IrFun funName 2 [cloName,varName] (makeTerm cloName []{-¿FREEVARS?-} t' 0)]
-           return $ MkClosure funName [] -- está bien que sea vacio??         
-closureConvert (App _ f e)             = do f' <- closureConvert f 
-                                            e' <- closureConvert e
-                                            return $ IrCall (IrAccess f' 0) [f',e'] -- esta bien? donde iria el let de las diapos??
-
+           tell $ [IrFun funName 2 [cloName,varName] (makeTerm cloName fVars t' 1)]
+           return $ MkClosure funName (namesToIrTms fVars)          
+closureConvert (App _ f e)             = 
+    do f' <- closureConvert f 
+       e' <- closureConvert e
+       n <- get
+       modify (+1)
+       let name = ("__e" ++ (show n))
+       return $ IrLet name f' (IrCall (IrAccess (IrVar name) 0) [(IrVar name),e']) 
 closureConvert (BinaryOp _ op t1 t2)   = do ct1 <- closureConvert t1
                                             ct2 <- closureConvert t2 
                                             return $ IrBinaryOp op ct1 ct2 
@@ -33,10 +56,11 @@ closureConvert (Fix _ funN _ varN _ t) =
        let varName = "__" ++ varN ++ show(n)
            funName = "__" ++ show(n+1)
            cloName = "__clo" ++ show(n+2)
-           funRName = "__" ++ funN ++ show(n+3) in 
-        do t' <- closureConvert (open varName (open funRName t)) -- en que orden el open???
-           tell $ [IrFun funName 2 [cloName,varName] (makeTerm cloName []{-¿FREEVARS?-} t' 0)] 
-           return $ MkClosure funName [] -- está bien que sea vacio??   
+           funRName = "__" ++ funN ++ show(n+3) 
+           fVars = freeVars' t in 
+        do t' <- closureConvert (openN [funRName,varName] t) -- en que orden el open???
+           tell $ [IrFun funName 2 [cloName,varName] (makeTermR cloName (funRName:fVars) t' 1)] 
+           return $ MkClosure funName (namesToIrTms fVars)  -- está bien????   
 
 closureConvert (IfZ _ c t1 t2)         = do cc <- closureConvert c
                                             ct1 <- closureConvert t1
@@ -53,11 +77,11 @@ closureConvert (LetIn _ name _ t1 t2)  = do ct1 <- closureConvert t1
 runCC' :: [Decl Term Ty] -> StateT Int (Writer [IrDecl]) ()
 runCC' []     = return ()
 runCC' (d:ds) = do t <- closureConvert (declBody d)
-                   tell $ [IrVal (declName d) t]
+                   tell $ [IrVal (declName d) t]   
                    runCC' ds
 
 runCC :: [Decl Term Ty] -> [IrDecl]
-runCC ds     = let (_,decls) = (runWriter (runStateT (runCC' ds) 0))
+runCC ds     = let (_,decls) = (runWriter (runStateT (runCC' (reverse ds)) 0))
                in decls
                          
                       
