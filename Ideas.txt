@@ -66,7 +66,7 @@ dentro de un term, pero cuando se pasa a otro se pierde?
 
 
 
-
+19/11:
 
 IrVal {irDeclName = "x", irDeclDef = IrConst (CNat 1)}
 IrVal {irDeclName = "y", irDeclDef = IrBinaryOp Add (IrConst (CNat 2)) (IrVar "x")}
@@ -78,6 +78,7 @@ IrVal {irDeclName = "suma", irDeclDef = MkClosure "__4" []}
 IrVal {irDeclName = "suma5", irDeclDef = IrLet "__e9" (IrVar "suma") (IrCall (IrAccess (IrVar "__e9") 0) [IrVar "__e9",IrConst (CNat 5)])}
 IrFun {irDeclName = "__11", irDeclArity = 2, irDeclArgNames = ["__clo12","__n10"], irDeclBody = IrLet "__countdown13" (IrVar "__clo12") (IrIfZ (IrVar "__n10") (IrConst (CNat 0)) (IrLet "__e14" (IrVar "__countdown13") (IrCall (IrAccess (IrVar "__e14") 0) [IrVar "__e14",IrBinaryOp Diff (IrVar "__n10") (IrConst (CNat 1))])))}
 IrVal {irDeclName = "countdown", irDeclDef = MkClosure "__11" []}
+
 
 
 - Puede ser que en el ejemplo no se agregue el let (regla de aplicacion)??
