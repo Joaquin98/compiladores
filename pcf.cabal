@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c0afbf92d932639e9636693fe98df954e5e41475f5e6517e479881dcfe7fe4c1
+-- hash: 0a2e713fadb19b45f133fcf39967ed1feabee77f8c3b9ff71d0dec097773ed78
 
 name:           pcf
 version:        0.1.0.0
@@ -29,12 +29,14 @@ library
   exposed-modules:
       Bytecompile
       CEK
+      CIR
       Closures
       Common
       Elab
       Errors
       Eval
       Global
+      InstSel
       Lang
       MonadPCF
       Parse
@@ -51,6 +53,7 @@ library
     , bytestring
     , exceptions
     , haskeline
+    , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec
@@ -70,6 +73,7 @@ executable pcf
     , bytestring
     , exceptions
     , haskeline
+    , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec
@@ -92,6 +96,7 @@ test-suite pcf-test
     , compiladores
     , exceptions
     , haskeline
+    , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec

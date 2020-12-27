@@ -136,6 +136,8 @@ data IrDecl = IrVal { irDeclName :: Name , irDeclDef :: IrTm }
             | IrFun { irDeclName :: Name, irDeclArity :: Int, irDeclArgNames :: [Name], irDeclBody :: IrTm }
     deriving (Show)
 
+type IrDecls = [IrDecl]
+
 -- | Obtiene la info en la raíz del término.
 getInfo :: Tm info var ty -> info
 getInfo (V i _)           = i

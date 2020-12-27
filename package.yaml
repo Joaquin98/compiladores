@@ -29,6 +29,7 @@ dependencies:
 - optparse-applicative
 - binary
 - bytestring
+- llvm-hs-pure
 
 
 library:

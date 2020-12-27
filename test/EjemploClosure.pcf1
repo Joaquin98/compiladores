@@ -1,0 +1,7 @@
+type N = Nat
+
+let add : N -> (N -> N) = (fun (x:N) -> (let f:(N -> N) = (fun (y:N)-> x + y) in f))
+
+let add5 : N -> N = add 5
+
+let ocho : N = add5 3

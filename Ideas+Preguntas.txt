@@ -5,6 +5,23 @@ Cosas que se pueden agregar:
 
 - Comando para cargar todos los archivos .pcf que hayan en test.
 
+Posibles errores:
+
+- try en el unaryOp
+El try siempre vuelve atras lo consumido por un 
+parser que terminó en error, en cambio el <|> solo
+ejecuta el siguiente en caso que el primer intento
+no haya consumido ningun texto.
+
+- parserZero en letRec
+ParserZero es un parser que falla siempre sin consumir 
+nada.
+
+- La funciones existentes de los tipos en el entorno 
+global no eran para usar con los sinonimos de tipos
+sino que eran para ir guardando en tipo de cada variable
+declarada en un let para usarlos luego en el typeChecker.
+
 
 Consultas:
 
@@ -87,20 +104,12 @@ IrVal {irDeclName = "countdown", irDeclDef = MkClosure "__11" []}
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 - Donde hacer el reemplazo de tipos:
 -- En el handleDecl en el main (STm que tome parametro para los tipos y hacer la conversion).
 Tomamos Type n = t como una declaración. Una declaración puede ser tanto un let como un type 
 (Either TDecl, TTDecl).
 -- Parsear directamente a STm. No sabemos como se haría para llevar un estado (que realcione 
 nombre de tipos con tipos) mientras parseamos.
+
+
+

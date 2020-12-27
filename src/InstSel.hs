@@ -158,7 +158,7 @@ cgExpr (BinOp Lang.Add v1 v2) = do
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
 
-cgExpr (BinOp Lang.Sub v1 v2) = do
+cgExpr (BinOp Lang.Diff v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
   vf1 <- freshName
@@ -190,7 +190,7 @@ cgExpr (UnOp Lang.Succ v) = do
   cgExpr (BinOp Lang.Add v (C 1)) -- trucho
 
 cgExpr (UnOp Lang.Pred v) = do
-  cgExpr (BinOp Lang.Sub v (C 1)) -- trucho
+  cgExpr (BinOp Lang.Diff v (C 1)) -- trucho
 
 cgExpr (UnOp Lang.Print v) = do
   v <- cgV v
