@@ -1,6 +1,6 @@
-module InstSel where
+module InstSel (codegen,Module) where
 
-import CIR
+import CIR 
 import Data.String
 import Control.Monad.Writer
 import Control.Monad.State
@@ -70,15 +70,15 @@ emptyModule =
     , moduleDefinitions = [defnMkclosure, defnPrint]
   }
 
-codegen :: CanonProg -> Module
-codegen (CanonProg funs) =
+codegen :: CIR.CanonProg -> Module
+codegen (CIR.CanonProg funs) =
   let defns = map (either cgFun cgVal) funs in
   let modulo = emptyModule in
   modulo {
       moduleDefinitions = moduleDefinitions modulo ++ defns
   }
 
-cgFun :: CanonFun -> Definition
+cgFun :: CIR.CanonFun -> Definition
 cgFun (f, args, blocks) =
   let comp = mapM cgBlock blocks in
   let (llvmBlocks, _) = runState comp 0 in
@@ -89,7 +89,7 @@ cgFun (f, args, blocks) =
     , returnType  = ptr
   }
 
-cgVal :: CanonVal -> Definition
+cgVal :: CIR.CanonVal -> Definition
 cgVal nm =
   GlobalDefinition $ globalVariableDefaults {
       name = mkName nm
@@ -121,7 +121,7 @@ freshName :: M Name
 freshName = freshName' "__r_"
 
 cgInst :: CIR.Inst -> M ()
-cgInst (Assign (Temp i) e) = do 
+cgInst (CIR.Assign (CIR.Temp i) e) = do 
   ee <- cgExpr e
   tell [mkName i := ee]
 
@@ -144,7 +144,7 @@ one = cint 1
 
 cgExpr :: CIR.Expr -> M LLVM.AST.Instruction
 -- FIXME: duplicación
-cgExpr (BinOp Lang.Add v1 v2) = do
+cgExpr (CIR.BinOp Lang.Add v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
   vf1 <- freshName
@@ -158,7 +158,7 @@ cgExpr (BinOp Lang.Add v1 v2) = do
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
 
-cgExpr (BinOp Lang.Diff v1 v2) = do
+cgExpr (CIR.BinOp Lang.Diff v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
   vf1 <- freshName
@@ -171,7 +171,7 @@ cgExpr (BinOp Lang.Diff v1 v2) = do
                (LocalReference integer vf2)
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
-
+{-
 cgExpr (BinOp Lang.Prod v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
@@ -185,14 +185,16 @@ cgExpr (BinOp Lang.Prod v1 v2) = do
                (LocalReference integer vf2)
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
-
+-}
+{-
 cgExpr (UnOp Lang.Succ v) = do
   cgExpr (BinOp Lang.Add v (C 1)) -- trucho
 
 cgExpr (UnOp Lang.Pred v) = do
   cgExpr (BinOp Lang.Diff v (C 1)) -- trucho
-
-cgExpr (UnOp Lang.Print v) = do
+-}
+{-
+cgExpr (UnOp Lang.Print v) = do -- ???????????'
   v <- cgV v
   vf <- freshName
   r <- freshName
@@ -206,14 +208,14 @@ cgExpr (UnOp Lang.Print v) = do
                  []
                  []]
   return (IntToPtr (LocalReference integer r) ptr [])
-
+-}
 cgExpr (CIR.Phi brs) = do
   args <- mapM (\(loc, v) -> do op <- cgV v
                                 return (op, mkName loc)) brs
   return $ LLVM.AST.Phi ptr args []
 
 -- truchísimo
-cgExpr (V v) = do
+cgExpr (CIR.V v) = do
   cgExpr (BinOp Lang.Add v (C 0))
 
 cgExpr (CIR.Call v args) = do
@@ -247,7 +249,7 @@ cgExpr (CIR.MkClosure fn args) = do
       []
       []
 
-cgExpr (Access v idx) = do
+cgExpr (CIR.Access v idx) = do
   tmp <- freshName' "addr"
   v <- cgV v
   r <- freshName
@@ -259,31 +261,31 @@ cgExpr (Access v idx) = do
   return $ Load False (LocalReference ptrptr tmp) Nothing 0 []
 
 cgV :: CIR.Val -> M LLVM.AST.Operand
-cgV (R (Temp i)) =
+cgV (CIR.R (CIR.Temp i)) =
   return $ LocalReference ptr (mkName i)
 
-cgV (C i) = do
+cgV (CIR.C i) = do
   n <- freshName
   tell [n := IntToPtr (cint i) ptr []]
   return $ LocalReference ptr n
 
-cgV (G nm) = do
+cgV (CIR.G nm) = do
   r <- freshName
   tell [r := Load False (global (mkName nm) ptrptr)
                   Nothing 0 []]
   return $ LocalReference ptr r
 
 cgTerm :: CIR.Terminator -> M (Named LLVM.AST.Terminator)
-cgTerm (Jump l) =
+cgTerm (CIR.Jump l) =
   return $ Do $ Br (mkName l) []
 
-cgTerm (CondJump (Eq v1 v2) lt lf) = do
+cgTerm (CIR.CondJump (CIR.Eq v1 v2) lt lf) = do
   b <- freshName' "cond"
   v1 <- cgV v1
   v2 <- cgV v2
   tell [b := ICmp IP.EQ v1 v2 []]
   return $ Do $ CondBr (LocalReference i1 b) (mkName lt) (mkName lf) []
 
-cgTerm (Return v1) = do
+cgTerm (CIR.Return v1) = do
   v1 <- cgV v1
   return $ Do $ Ret (Just v1) []

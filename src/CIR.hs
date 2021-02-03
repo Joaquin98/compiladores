@@ -1,4 +1,4 @@
-module CIR where
+module CIR (runCanon,Inst(..),Expr(..),Reg(..),Val(..),Cond(..),Terminator(..),CanonProg(..),CanonVal(..),CanonFun(..),BasicBlock) where
 
 import Lang ( BinaryOp, Const(CNat), Name, UnaryOp, IrDecl(IrVal,IrFun),IrDecls,IrTm(IrVar,IrCall,IrConst,IrBinaryOp,IrLet,IrIfZ,MkClosure,IrAccess))
 import Data.List (intercalate)
@@ -79,6 +79,8 @@ runCanon' (IrFun name _ args tm)  = do setLoc name
   Canonicaliza una lista de declaraciones, manteniendo el estado
   (número necesario para obtener nombres frescos) entre las
   canonicalizaciones de cada elemento.
+
+  Es necesaria la segunda linea de vals?
 -}
 runSavingState :: [IrDecl] -> (Int,Loc,[Inst]) -> [Either CanonFun CanonVal]
 runSavingState (fun@(IrFun name _ args tm):xs) initS  = let funC = runCanon' fun 
@@ -92,9 +94,13 @@ runSavingState vals initS                             = let ((val,state),list) =
   Declara cada una de las variables dentro del main.
 -}
 makeMain' :: IrDecls -> StateT (Int,Loc,[Inst]) (Writer Blocks) Val
+makeMain' [(IrVal name tm)]    = do tm' <- irToBlocks tm
+                                    addInst $ Store name (V tm')
+                                    return tm'
 makeMain' ((IrVal name tm):xs) = do tm' <- irToBlocks tm
                                     addInst $ Store name (V tm')
                                     makeMain' xs
+
 
 {-
   Abre y cierra el main, delegando el resto a makeMain'.
@@ -161,22 +167,15 @@ irToBlocks (IrCall tm tms)        = do r1  <- getNewReg ""
                                        addInst $ Assign r1 (Call tm' tms')
                                        return $ R r1
 irToBlocks (IrConst (CNat n))     = return (C n)
-irToBlocks (IrBinaryOp op t1 t2)  = do r1  <- getNewReg ""
-                                       r2  <- getNewReg ""
-                                       r3  <- getNewReg ""
+irToBlocks (IrBinaryOp op t1 t2)  = do r  <- getNewReg ""
                                        t1' <- irToBlocks t1
                                        t2' <- irToBlocks t1  
-                                       addInst $ Assign r1 (V t1')
-                                       addInst $ Assign r2 (V t2')
-                                       addInst $ Assign r3 (BinOp op (R r1) (R r2))
-                                       return (R r3)
-irToBlocks (IrLet name t1 t2)     = do r1  <- getNewReg ""
-                                       r2  <- getNewReg ""
-                                       t1' <- irToBlocks t1
-                                       addInst $ Store name (V t1')
+                                       addInst $ Assign r (BinOp op t1' t2')
+                                       return (R r)
+irToBlocks (IrLet name t1 t2)     = do t1' <- irToBlocks t1
+                                       addInst $ Assign (Temp name) (V t1')
                                        t2' <- irToBlocks t2
-                                       addInst $ Assign r2 (V t1')
-                                       return $ R r2
+                                       return $ t2'
 irToBlocks (IrIfZ c t1 t2)        = do lEntry <- getNewLoc "entry"
                                        lThen  <- getNewLoc "then"
                                        lElse  <- getNewLoc "else"
@@ -184,22 +183,16 @@ irToBlocks (IrIfZ c t1 t2)        = do lEntry <- getNewLoc "entry"
                                        closeBlock (Jump lEntry)
                                        setLoc lEntry
                                        c' <- irToBlocks c
-                                       rc <- getNewReg "cond"
-                                       addInst (Assign rc (V c'))
                                        closeBlock $ CondJump (Eq c' (C 0)) lThen lElse
                                        setLoc lThen
                                        t1' <- irToBlocks t1
-                                       rt1 <- getNewReg "then"
-                                       addInst (Assign rt1 (V t1'))
                                        closeBlock $ Jump lCont
                                        setLoc lThen
                                        t2' <- irToBlocks t2
-                                       rt2 <- getNewReg "else"
-                                       addInst (Assign rt1 (V t2'))
                                        closeBlock $ Jump lCont
                                        setLoc lCont
                                        rCont <- getNewReg "cont"
-                                       addInst $ Assign rCont $ Phi [(lThen,(R rt1)),(lElse,(R rt2))]
+                                       addInst $ Assign rCont $ Phi [(lThen, t1'),(lElse, t2')]
                                        return $ R rCont
 irToBlocks (Lang.MkClosure name tms)   = do r1   <- getNewReg ""
                                             tms' <- mapM irToBlocks tms

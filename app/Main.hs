@@ -22,6 +22,7 @@ import Data.Char ( isSpace )
 import Control.Exception ( catch , IOException )
 import System.Environment ( getArgs )
 import System.IO ( stderr, hPutStr )
+import System.Process
 
 import Global ( GlEnv(..) )
 import Errors
@@ -34,8 +35,10 @@ import PPrint ( pp , ppTy )
 import MonadPCF
 import TypeChecker ( tc, tcDecl )
 import Closures (runCC,printIrDecls)
-
-
+import InstSel (codegen,Module)
+import CIR (runCanon,CanonProg)
+import Data.Text.Lazy.IO as TIO ( writeFile )
+import LLVM.Pretty ( ppllvm )
 -----------
 import Options.Applicative
 import Bytecompile
@@ -45,6 +48,8 @@ data Mode = Interactive
           | Bytecompile
           | Run
           | ClosureConvert
+          | LLVMConvert
+          | LLVMRun
 
 -- Parser de banderas
 parseMode :: Parser Mode
@@ -52,7 +57,9 @@ parseMode =
      flag' Typecheck (long "typechek" <> short 't' <> help "Solo chequea tipos") 
      <|>  flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compila a la BVM")
      <|>  flag' ClosureConvert (long "cc" <> help "Convierte a clausuras")
-     <|>  flag' Run (long "run" <> short 'r' <> help "Ehecuta bytecode en la BVM")
+     <|>  flag' LLVMConvert (long "llvmconvert" <> short '1' <> help "Convierte a codigo LLVM")
+     <|>  flag' LLVMRun (long "llvmrun" <> short '2' <> help "Ejecuta codigo LLVM")
+     <|>  flag' Run (long "run" <> short 'r' <> help "Ejecuta bytecode en la BVM")
      <|>  flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecuta de forma interactiva")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
@@ -81,7 +88,15 @@ main = execParser opts >>= go
         go (ClosureConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToClosures files))
                                        case a of
                                          Right (Just closures) -> do printIrDecls closures
-                  
+        go (LLVMConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToLLVM files))
+                                    case a of
+                                      Right (Just llvm) -> do liftIO $ TIO.writeFile "output.ll" (ppllvm llvm) 
+        go (LLVMRun,files) = let commandline = "clang -Wno-override-module output.ll runtime.c -lgc -o prog"
+                             in do liftIO $ system commandline
+                                   return ()
+              
+
+          
                   
 compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [IrDecl])
 compileToClosures (arg:args) = do lift $ catchErrors $ makeClosures arg
@@ -99,6 +114,26 @@ makeClosures f = do
     s <- get
     let closures = runCC (glb s) in
       return $ closures
+
+
+compileToLLVM :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe Module)
+compileToLLVM (arg:args) = do lift $ catchErrors $ compileFileLLVM arg
+
+{- Compile file que haga la parte común y que retorne la lista de declaraciones
+   ya procesadas. -}
+compileFileLLVM ::  MonadPCF m => String -> m (Module)
+compileFileLLVM f = do
+    printPCF ("Abriendo "++f++"...")
+    let filename = reverse(dropWhile isSpace (reverse f))
+    x <- liftIO $ catch (readFile filename)
+               (\e -> do let err = show (e :: IOException)
+                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
+                         return "")
+    decls <- parseIO filename program x
+    mapM_ handleDecl' decls
+    s <- get
+    let moduleLLVM = codegen $ runCanon $ runCC (glb s) in
+      return moduleLLVM
 
 ------------
 -- AGREGADO (NO COPIADO DEL APUNTE) 

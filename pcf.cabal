@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0a2e713fadb19b45f133fcf39967ed1feabee77f8c3b9ff71d0dec097773ed78
+-- hash: a069233154eae90c46fce36fd435642cef41dd06c5019bb7ef3378a20cfebacd
 
 name:           pcf
 version:        0.1.0.0
@@ -53,11 +53,14 @@ library
     , bytestring
     , exceptions
     , haskeline
+    , llvm-hs-pretty
     , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec
     , pretty
+    , process
+    , text
   default-language: Haskell2010
 
 executable pcf
@@ -73,12 +76,15 @@ executable pcf
     , bytestring
     , exceptions
     , haskeline
+    , llvm-hs-pretty
     , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec
     , pcf
     , pretty
+    , process
+    , text
   default-language: Haskell2010
 
 test-suite pcf-test
@@ -96,9 +102,12 @@ test-suite pcf-test
     , compiladores
     , exceptions
     , haskeline
+    , llvm-hs-pretty
     , llvm-hs-pure
     , mtl
     , optparse-applicative
     , parsec
     , pretty
+    , process
+    , text
   default-language: Haskell2010
