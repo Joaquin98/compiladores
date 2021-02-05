@@ -1,7 +1,7 @@
 module CIR (runCanon,Inst(..),Expr(..),Reg(..),Val(..),Cond(..),Terminator(..),CanonProg(..),CanonVal(..),CanonFun(..),BasicBlock) where
 
 import Lang ( BinaryOp, Const(CNat), Name, UnaryOp, IrDecl(IrVal,IrFun),IrDecls,IrTm(IrVar,IrCall,IrConst,IrBinaryOp,IrLet,IrIfZ,MkClosure,IrAccess))
-import Data.List (intercalate)
+import Data.List (intercalate,isPrefixOf)
 import Control.Monad.Writer
 import Control.Monad.State.Lazy
 
@@ -160,7 +160,8 @@ closeBlock ter = do (n,l,is) <- get
   Convierte un termino en bloques.
 -}
 irToBlocks :: IrTm -> StateT (Int,Loc,[Inst]) (Writer Blocks) Val
-irToBlocks (IrVar name)           = return (G name) -- ??
+irToBlocks (IrVar name)           | isPrefixOf "__" name = return (R (Temp name))
+                                  | otherwise          = return (G name) 
 irToBlocks (IrCall tm tms)        = do r1  <- getNewReg ""
                                        tm' <- irToBlocks tm
                                        tms' <- mapM irToBlocks tms
@@ -169,7 +170,7 @@ irToBlocks (IrCall tm tms)        = do r1  <- getNewReg ""
 irToBlocks (IrConst (CNat n))     = return (C n)
 irToBlocks (IrBinaryOp op t1 t2)  = do r  <- getNewReg ""
                                        t1' <- irToBlocks t1
-                                       t2' <- irToBlocks t1  
+                                       t2' <- irToBlocks t2  
                                        addInst $ Assign r (BinOp op t1' t2')
                                        return (R r)
 irToBlocks (IrLet name t1 t2)     = do t1' <- irToBlocks t1
@@ -187,7 +188,7 @@ irToBlocks (IrIfZ c t1 t2)        = do lEntry <- getNewLoc "entry"
                                        setLoc lThen
                                        t1' <- irToBlocks t1
                                        closeBlock $ Jump lCont
-                                       setLoc lThen
+                                       setLoc lElse
                                        t2' <- irToBlocks t2
                                        closeBlock $ Jump lCont
                                        setLoc lCont

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a069233154eae90c46fce36fd435642cef41dd06c5019bb7ef3378a20cfebacd
+-- hash: fa7d1f8a67bc4bde162fe07c1826451c45a20151889491f790ac56670d26d1b5
 
 name:           pcf
 version:        0.1.0.0
@@ -51,6 +51,7 @@ library
       base >=4.7 && <5
     , binary
     , bytestring
+    , containers
     , exceptions
     , haskeline
     , llvm-hs-pretty
@@ -74,6 +75,7 @@ executable pcf
       base >=4.7 && <5
     , binary
     , bytestring
+    , containers
     , exceptions
     , haskeline
     , llvm-hs-pretty
@@ -100,6 +102,7 @@ test-suite pcf-test
     , binary
     , bytestring
     , compiladores
+    , containers
     , exceptions
     , haskeline
     , llvm-hs-pretty

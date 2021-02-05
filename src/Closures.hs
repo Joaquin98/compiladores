@@ -4,6 +4,7 @@ import Control.Monad.Writer
 import Control.Monad.State.Lazy
 import Subst
 import Data.List
+import Data.Set (toList, fromList)
 
 
 -- Retorna un nombre fresco.
@@ -14,7 +15,7 @@ getName name = do n <- get
 
 -- Dado un termino, retorna las variables libres que se encuentran en él.
 freeVars' :: Term -> StateT Int (Writer [IrDecl]) [Name]
-freeVars' t = return $ filter (\name -> isPrefixOf "__" name) (freeVars t)
+freeVars' t =  return $ toList $ fromList $ filter (\name -> isPrefixOf "__" name) (freeVars t)
 
 namesToIrTms :: [Name] -> [IrTm]
 namesToIrTms = map (\name -> IrVar name)

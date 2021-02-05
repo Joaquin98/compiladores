@@ -33,6 +33,7 @@ dependencies:
 - process
 - llvm-hs-pretty
 - text
+- containers
 
 
 library:
