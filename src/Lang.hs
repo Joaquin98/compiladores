@@ -38,7 +38,7 @@ type Name = String
 data Const = CNat Int
   deriving Show
 
-data UnaryOp = Succ | Pred
+data UnaryOp = Succ | Pred | Print
   deriving Show
 
 data BinaryOp = Add | Diff

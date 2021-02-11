@@ -91,7 +91,7 @@ main = execParser opts >>= go
         go (LLVMConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToLLVM files))
                                     case a of
                                       Right (Just llvm) -> do liftIO $ TIO.writeFile "output.ll" (ppllvm llvm) 
-        go (LLVMRun,files) = let commandline = "clang -Wno-override-module output.ll runtime.c -lgc -o prog"
+        go (LLVMRun,files) = let commandline = "clang -Wno-override-module output.ll runtime.c -lgc -o prog; ./prog"
                              in do liftIO $ system commandline
                                    return ()
               
@@ -132,7 +132,7 @@ compileFileLLVM f = do
     decls <- parseIO filename program x
     mapM_ handleDecl' decls
     s <- get
-    let moduleLLVM = codegen $ runCanon $ runCC (glb s) in
+    let moduleLLVM = codegen $ runCanon $ runCC (reverse(glb s)) in
       return moduleLLVM
 
 ------------
@@ -294,7 +294,7 @@ commands
   =  [ Cmd [":browse"]      ""        (const Browse) "Ver los nombres en scope",
        Cmd [":load"]        "<file>"  (Compile . CompileFile)
                                                      "Cargar un programa desde un archivo",
-       Cmd [":print"]       "<exp>"   Print          "Imprime un término y sus ASTs sin evaluarlo",
+       Cmd [":print"]       "<exp>"   Main.Print          "Imprime un término y sus ASTs sin evaluarlo",
        Cmd [":type"]        "<exp>"   Type           "Chequea el tipo de una expresión",
        Cmd [":quit",":Q"]        ""        (const Quit)   "Salir del intérprete",
        Cmd [":help",":?"]   ""        (const Help)   "Mostrar esta lista de comandos" ]
@@ -325,7 +325,7 @@ handleCommand cmd = do
                           CompileInteractive e -> compilePhrase e
                           CompileFile f        -> put (s {lfile=f}) >> compileFile f
                       return True
-       Print e   -> printPhrase e >> return True
+       Main.Print e   -> printPhrase e >> return True
        Type e    -> typeCheckPhrase e >> return True
 
 compilePhrase ::  MonadPCF m => String -> m ()

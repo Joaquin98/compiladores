@@ -193,7 +193,7 @@ cgExpr (UnOp Lang.Succ v) = do
 cgExpr (UnOp Lang.Pred v) = do
   cgExpr (BinOp Lang.Diff v (C 1)) -- trucho
 -}
-{-
+
 cgExpr (UnOp Lang.Print v) = do -- ???????????'
   v <- cgV v
   vf <- freshName
@@ -208,7 +208,7 @@ cgExpr (UnOp Lang.Print v) = do -- ???????????'
                  []
                  []]
   return (IntToPtr (LocalReference integer r) ptr [])
--}
+
 cgExpr (CIR.Phi brs) = do
   args <- mapM (\(loc, v) -> do op <- cgV v
                                 return (op, mkName loc)) brs

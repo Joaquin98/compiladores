@@ -1,5 +1,7 @@
 #let x : Nat = 3
-#let y : Nat = ifz 0 then x else 5
+#let k : Nat = 67575
+
+#type N = Nat
 
 #let f (x : Nat) : Nat = succ x
 
@@ -9,6 +11,23 @@
 
 #let rec suma(x y:Nat):Nat = ifz x then y else (suma (pred x) (succ y))
 
-#let res : Nat = suma 3 z
+#let rec mult(x y : N):Nat =ifz y then 0 else x + (mult x (pred y))
+
+#let rec exp(x y : N):Nat = ifz y then 1 else mult x (exp x (pred y))
+
+#let rec fact (x:N):Nat =  ifz x then 1 else mult x (fact (pred x))
+
+#let res : Nat = suma 3 435
+
+#let res2 : Nat = mult 5 5
+#let res3 : Nat = exp 2 3
+#let res4 : Nat = fact 7
+#let res2 : Nat = g 34
 
 let rec fib(x:Nat):Nat = ifz x then 1 else (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
+
+let fibb : Nat = fib 20
+
+#let p (x:Nat) : Nat = ifz x then (ifz 0 then 5 else 6) else x 
+
+#let res : Nat = p 0

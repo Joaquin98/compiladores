@@ -58,3 +58,34 @@ let rec fib(x:Nat):Nat = ifz x then 1 else
 Error del free
 Constructor Print LLVM
 Producto
+
+
+Hola Mauro, estabamos intentando terminar la compilación a código LLVM
+y nos surguieron algunas dudas:
+
+- En el módulo InstSel aparece una operación binaria para el producto
+(Prod) tendríamos que agregarla a nuestro lenguaje?
+
+- Logramos compilar a llvm y correr algunos programas, pero no sabemos 
+ como hacer para ver el valor de retorno de nuestros programas. Vimos que
+ en el mismo módulo está la operación unaria Print y pensamos que tal vez
+ se podría utilizar para printear el valor de la última declaración. 
+ Habría que agregar la función print a nuestro lenguaje o solo agregarla 
+ al lenguaje intermedio y aplicarsela a la última declaración? O hay alguna
+  otra forma de saber el valor de retorno?
+
+- Estamos teniendo problemas al compilar una función recursiva que tienen 
+  en su definición dos llamadas a si misma, como es el caso de fibonacci:
+
+    let rec fib(x:Nat):Nat = ifz x then 1 else 
+    (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
+
+Cuando la ejecutamos nos tira un error: "free(): invalid pointer"
+
+Queríamos saber si nos podrías dar consulta o guiarnos un poco por escrito.
+
+Gracias!
+
+- El lenguaje antes al hacer una resta (a-b) si b > a entonces retornaba 0.
+Ahora al compilar a llvm cuando se hace una resta puede retornar un número 
+negativo.

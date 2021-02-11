@@ -1,6 +1,6 @@
-module CIR (runCanon,Inst(..),Expr(..),Reg(..),Val(..),Cond(..),Terminator(..),CanonProg(..),CanonVal(..),CanonFun(..),BasicBlock) where
+module CIR where
 
-import Lang ( BinaryOp, Const(CNat), Name, UnaryOp, IrDecl(IrVal,IrFun),IrDecls,IrTm(IrVar,IrCall,IrConst,IrBinaryOp,IrLet,IrIfZ,MkClosure,IrAccess))
+import Lang ( BinaryOp,UnaryOp(..), Const(CNat), Name, UnaryOp, IrDecl(IrVal,IrFun),IrDecls,IrTm(IrVar,IrCall,IrConst,IrBinaryOp,IrLet,IrIfZ,MkClosure,IrAccess))
 import Data.List (intercalate,isPrefixOf)
 import Control.Monad.Writer
 import Control.Monad.State.Lazy
@@ -21,7 +21,7 @@ data Inst =
 
 data Expr =
     BinOp BinaryOp Val Val
-  -- | UnOp UnaryOp Val
+  | UnOp UnaryOp Val
   | Phi [(Loc, Val)]
   | Call Val [Val]
   | MkClosure Loc [Val]
@@ -95,7 +95,9 @@ runSavingState vals initS                             = let ((val,state),list) =
 -}
 makeMain' :: IrDecls -> StateT (Int,Loc,[Inst]) (Writer Blocks) Val
 makeMain' [(IrVal name tm)]    = do tm' <- irToBlocks tm
-                                    addInst $ Store name (V tm')
+                                    r  <- getNewReg ""
+                                    addInst $ Assign r (UnOp Print tm')
+                                    addInst $ Store name (V (R r))
                                     return tm'
 makeMain' ((IrVal name tm):xs) = do tm' <- irToBlocks tm
                                     addInst $ Store name (V tm')
@@ -167,7 +169,9 @@ irToBlocks (IrCall tm tms)        = do r1  <- getNewReg ""
                                        tms' <- mapM irToBlocks tms
                                        addInst $ Assign r1 (Call tm' tms')
                                        return $ R r1
-irToBlocks (IrConst (CNat n))     = return (C n)
+irToBlocks (IrConst (CNat n))     = do r <- getNewReg ""
+                                       addInst $ Assign r (V (C n))
+                                       return (R r)
 irToBlocks (IrBinaryOp op t1 t2)  = do r  <- getNewReg ""
                                        t1' <- irToBlocks t1
                                        t2' <- irToBlocks t2  
@@ -187,13 +191,15 @@ irToBlocks (IrIfZ c t1 t2)        = do lEntry <- getNewLoc "entry"
                                        closeBlock $ CondJump (Eq c' (C 0)) lThen lElse
                                        setLoc lThen
                                        t1' <- irToBlocks t1
+                                       (_, actualLocThen, _) <- get
                                        closeBlock $ Jump lCont
                                        setLoc lElse
                                        t2' <- irToBlocks t2
+                                       (_, actualLocElse, _) <- get
                                        closeBlock $ Jump lCont
                                        setLoc lCont
                                        rCont <- getNewReg "cont"
-                                       addInst $ Assign rCont $ Phi [(lThen, t1'),(lElse, t2')]
+                                       addInst $ Assign rCont $ Phi [(actualLocThen, t1'),(actualLocElse, t2')]
                                        return $ R rCont
 irToBlocks (Lang.MkClosure name tms)   = do r1   <- getNewReg ""
                                             tms' <- mapM irToBlocks tms
