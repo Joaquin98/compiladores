@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fa7d1f8a67bc4bde162fe07c1826451c45a20151889491f790ac56670d26d1b5
+-- hash: 07a439b8760f200d95039a6e1e5529c5c267c41e820120fc9c8e463a3b70c306
 
 name:           pcf
 version:        0.1.0.0
@@ -93,6 +93,7 @@ test-suite pcf-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Optimizations
       Paths_pcf
   hs-source-dirs:
       test

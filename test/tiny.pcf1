@@ -24,10 +24,14 @@
 #let res4 : Nat = fact 7
 #let res2 : Nat = g 34
 
-let rec fib(x:Nat):Nat = ifz x then 1 else (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
+#let rec fib(x:Nat):Nat = ifz x then 1 else (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
 
-let fibb : Nat = fib 20
+#let fibb : Nat = fib 20
 
 #let p (x:Nat) : Nat = ifz x then (ifz 0 then 5 else 6) else x 
 
 #let res : Nat = p 0
+
+
+let rec mult (x y: Nat) : Nat = ifz y then 0 else x + (mult x (y-1))
+let ans : Nat = mult 3 4
