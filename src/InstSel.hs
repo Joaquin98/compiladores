@@ -1,12 +1,12 @@
 module InstSel (codegen,Module) where
 
-import CIR 
+import CIR
 import Data.String
 import Control.Monad.Writer
 import Control.Monad.State
 import qualified Lang
---import Common
 
+import GHC.Word ( Word32 )
 import LLVM.AST
 import LLVM.AST.Global
 import qualified LLVM.AST.AddrSpace
@@ -19,8 +19,12 @@ import qualified LLVM.AST.IntegerPredicate as IP
 i1 :: Type
 i1 = IntegerType 1
 
+-- Tamaño de una palabra de la máquina, en bits
+width :: GHC.Word.Word32
+width = 64
+
 integer :: Type
-integer = IntegerType 32
+integer = IntegerType width
 
 ptr :: Type
 ptr = PointerType integer (LLVM.AST.AddrSpace.AddrSpace 0)
@@ -70,15 +74,15 @@ emptyModule =
     , moduleDefinitions = [defnMkclosure, defnPrint]
   }
 
-codegen :: CIR.CanonProg -> Module
-codegen (CIR.CanonProg funs) =
+codegen :: CanonProg -> Module
+codegen (CanonProg funs) =
   let defns = map (either cgFun cgVal) funs in
   let modulo = emptyModule in
   modulo {
       moduleDefinitions = moduleDefinitions modulo ++ defns
   }
 
-cgFun :: CIR.CanonFun -> Definition
+cgFun :: CanonFun -> Definition
 cgFun (f, args, blocks) =
   let comp = mapM cgBlock blocks in
   let (llvmBlocks, _) = runState comp 0 in
@@ -89,7 +93,7 @@ cgFun (f, args, blocks) =
     , returnType  = ptr
   }
 
-cgVal :: CIR.CanonVal -> Definition
+cgVal :: CanonVal -> Definition
 cgVal nm =
   GlobalDefinition $ globalVariableDefaults {
       name = mkName nm
@@ -121,7 +125,7 @@ freshName :: M Name
 freshName = freshName' "__r_"
 
 cgInst :: CIR.Inst -> M ()
-cgInst (CIR.Assign (CIR.Temp i) e) = do 
+cgInst (Assign (Temp i) e) = do 
   ee <- cgExpr e
   tell [mkName i := ee]
 
@@ -134,7 +138,7 @@ cgInst (CIR.Store nm e) = do
                             Nothing 0 []]
 
 cint :: Integral a => a -> Operand
-cint i = ConstantOperand $ C.Int 32 (fromIntegral i)
+cint i = ConstantOperand $ C.Int width (fromIntegral i)
 
 zero :: Operand
 zero = cint 0
@@ -144,7 +148,7 @@ one = cint 1
 
 cgExpr :: CIR.Expr -> M LLVM.AST.Instruction
 -- FIXME: duplicación
-cgExpr (CIR.BinOp Lang.Add v1 v2) = do
+cgExpr (BinOp Lang.Add v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
   vf1 <- freshName
@@ -158,19 +162,26 @@ cgExpr (CIR.BinOp Lang.Add v1 v2) = do
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
 
-cgExpr (CIR.BinOp Lang.Diff v1 v2) = do
+cgExpr (BinOp Lang.Diff v1 v2) = do
   v1 <- cgV v1
   v2 <- cgV v2
   vf1 <- freshName
   vf2 <- freshName
   r <- freshName
+  r' <- freshName
+  r'64 <- freshName
+  r'' <- freshName
   tell [vf1 := PtrToInt v1 integer []]
   tell [vf2 := PtrToInt v2 integer []]
   tell [r := Sub False False
                (LocalReference integer vf1)
                (LocalReference integer vf2)
                []]
-  return (IntToPtr (LocalReference integer r) ptr [])
+  tell [r' := ICmp IP.SLT (cint 0) (LocalReference integer r) []]
+  tell [r'64 := ZExt (LocalReference i1 r') integer []]
+  tell [r'' := Mul False False (LocalReference integer r)
+                               (LocalReference integer r'64) []]
+  return (IntToPtr (LocalReference integer r'') ptr [])
 {-
 cgExpr (BinOp Lang.Prod v1 v2) = do
   v1 <- cgV v1
@@ -185,16 +196,14 @@ cgExpr (BinOp Lang.Prod v1 v2) = do
                (LocalReference integer vf2)
                []]
   return (IntToPtr (LocalReference integer r) ptr [])
--}
-{-
+
 cgExpr (UnOp Lang.Succ v) = do
   cgExpr (BinOp Lang.Add v (C 1)) -- trucho
 
 cgExpr (UnOp Lang.Pred v) = do
-  cgExpr (BinOp Lang.Diff v (C 1)) -- trucho
+  cgExpr (BinOp Lang.Sub v (C 1)) -- trucho
 -}
-
-cgExpr (UnOp Lang.Print v) = do -- ???????????'
+cgExpr (UnOp Lang.Print v) = do
   v <- cgV v
   vf <- freshName
   r <- freshName
@@ -215,7 +224,7 @@ cgExpr (CIR.Phi brs) = do
   return $ LLVM.AST.Phi ptr args []
 
 -- truchísimo
-cgExpr (CIR.V v) = do
+cgExpr (V v) = do
   cgExpr (BinOp Lang.Add v (C 0))
 
 cgExpr (CIR.Call v args) = do
@@ -249,43 +258,42 @@ cgExpr (CIR.MkClosure fn args) = do
       []
       []
 
-cgExpr (CIR.Access v idx) = do
+cgExpr (Access v idx) = do
   tmp <- freshName' "addr"
   v <- cgV v
   r <- freshName
   tell [
     r := BitCast v ptrptr [],
     tmp := GetElementPtr False (LocalReference ptrptr r) [cint idx] []
-    -- esto debe estar mal porque es un i32* ?
    ]
   return $ Load False (LocalReference ptrptr tmp) Nothing 0 []
 
 cgV :: CIR.Val -> M LLVM.AST.Operand
-cgV (CIR.R (CIR.Temp i)) =
+cgV (R (Temp i)) =
   return $ LocalReference ptr (mkName i)
 
-cgV (CIR.C i) = do
+cgV (C i) = do
   n <- freshName
   tell [n := IntToPtr (cint i) ptr []]
   return $ LocalReference ptr n
 
-cgV (CIR.G nm) = do
+cgV (G nm) = do
   r <- freshName
   tell [r := Load False (global (mkName nm) ptrptr)
                   Nothing 0 []]
   return $ LocalReference ptr r
 
 cgTerm :: CIR.Terminator -> M (Named LLVM.AST.Terminator)
-cgTerm (CIR.Jump l) =
+cgTerm (Jump l) =
   return $ Do $ Br (mkName l) []
 
-cgTerm (CIR.CondJump (CIR.Eq v1 v2) lt lf) = do
+cgTerm (CondJump (Eq v1 v2) lt lf) = do
   b <- freshName' "cond"
   v1 <- cgV v1
   v2 <- cgV v2
   tell [b := ICmp IP.EQ v1 v2 []]
   return $ Do $ CondBr (LocalReference i1 b) (mkName lt) (mkName lf) []
 
-cgTerm (CIR.Return v1) = do
+cgTerm (Return v1) = do
   v1 <- cgV v1
   return $ Do $ Ret (Just v1) []

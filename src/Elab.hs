@@ -81,20 +81,20 @@ binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
 
 expBindersD :: SDecl SMNTerm MultiBind STy -> SDecl SMNTerm UnaryBind STy
 expBindersD (DTer i name bs ty b term) = DTer i name (binderExp bs) ty b term
-expBindersD (DType i name ty) = DType i name ty
+expBindersD (DType i name ty)          = DType i name ty
 
 unaryToMulti :: [(UnaryBind, a)] -> [(MultiBind, a)] 
 unaryToMulti = map (\(ni,ti)->([ni],ti))
 
 desugarD :: SDecl SMNTerm UnaryBind STy -> Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)
-desugarD (DTer i name [] ty False term) = Right (Decl i name ty term)
-desugarD (DTer i name (b:bs) ty False term) = let ts = getFunType (b:bs) ty
-                                              in Right (Decl i name ts (SLam i (unaryToMulti(b:bs)) term))
+desugarD (DTer i name [] ty False term)      = Right (Decl i name ty term)
+desugarD (DTer i name (b:bs) ty False term)  = let ts = getFunType (b:bs) ty
+                                                in Right (Decl i name ts (SLam i (unaryToMulti(b:bs)) term))
   
 desugarD (DTer i name [(v, t)] ty True term) = Right (Decl i name (SFunTy t ty) (SFix i name (SFunTy t ty) v t term))
-desugarD (DTer i name (b:bs) ty True term) = let ts = getFunType bs ty
-                                                 new = (DTer i name [b] ts True (SLam i (unaryToMulti bs) term)) 
-                                             in  desugarD new
+desugarD (DTer i name (b:bs) ty True term)   = let ts = getFunType bs ty
+                                                   new = (DTer i name [b] ts True (SLam i (unaryToMulti bs) term)) 
+                                                in  desugarD new
 
 desugarD d@(DType i name ty) = Left d
 
@@ -110,17 +110,17 @@ elabD = desugarD . expBindersD
 
 
 expBinders :: SMNTerm -> SUNTerm
-expBinders (SV info var) = SV info var
-expBinders (SConst info const) = SConst info const
-expBinders (SLam info binds t) = SLam info (binderExp binds) (expBinders t)
-expBinders (SApp info t1 t2) = SApp info (expBinders t1) (expBinders t2)
-expBinders (SUnaryOpApp info op t) = SUnaryOpApp info op (expBinders t)
-expBinders (SUnaryOp info unaryOp) = SUnaryOp info unaryOp  
-expBinders (SBinaryOp info binaryop t1 t2) = SBinaryOp info binaryop (expBinders t1) (expBinders t2) 
-expBinders (SFix info n1 t1 n2 t2 t) = SFix info n1 t1 n2 t2 (expBinders t)
-expBinders (SIfZ info c t1 t2) = SIfZ info (expBinders c) (expBinders t1) (expBinders t2)
+expBinders (SV info var)                    = SV info var
+expBinders (SConst info const)              = SConst info const
+expBinders (SLam info binds t)              = SLam info (binderExp binds) (expBinders t)
+expBinders (SApp info t1 t2)                = SApp info (expBinders t1) (expBinders t2)
+expBinders (SUnaryOpApp info op t)          = SUnaryOpApp info op (expBinders t)
+expBinders (SUnaryOp info unaryOp)          = SUnaryOp info unaryOp  
+expBinders (SBinaryOp info binaryop t1 t2)  = SBinaryOp info binaryop (expBinders t1) (expBinders t2) 
+expBinders (SFix info n1 t1 n2 t2 t)        = SFix info n1 t1 n2 t2 (expBinders t)
+expBinders (SIfZ info c t1 t2)              = SIfZ info (expBinders c) (expBinders t1) (expBinders t2)
 expBinders (SLetIn info name binds ty t t') = SLetIn info name (binderExp binds) ty (expBinders t) (expBinders t')
-expBinders (SRec info name binds ty t t') = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
+expBinders (SRec info name binds ty t t')   = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
 
 {-
 getFunType :: [(Name, Ty)] -> Ty
@@ -129,7 +129,7 @@ getFunType ((n, t):bs) = FunTy t (getFunType bs)
 -}
 
 getFunType :: [(Name, STy)] -> STy -> STy
-getFunType [(n, t)] ty = SFunTy t ty
+getFunType [(n, t)] ty    = SFunTy t ty
 getFunType ((n, t):bs) ty = SFunTy t (getFunType bs ty)
 
 
@@ -138,25 +138,25 @@ unaryToBinary Succ = Add
 unaryToBinary Pred = Diff 
 
 desugar :: SUNTerm -> SNTerm
-desugar (SV info var) = V info var 
-desugar (SConst info c) = Const info c 
-desugar (SLam info binds t) = foldr (\(name,ty) ti -> Lam info name ty ti) (desugar t) binds 
-desugar (SApp info t1 t2) = App info (desugar t1) (desugar t2)
-desugar (SUnaryOpApp info op t) = BinaryOp info (unaryToBinary op) (desugar t) (Const info (CNat 1))
-desugar (SUnaryOp info op) = Lam info "x" SNatTy (desugar (SUnaryOpApp info op (SV info "x")))
-desugar (SBinaryOp info op t1 t2) = BinaryOp info op (desugar t1) (desugar t2) 
-desugar (SFix info n1 t1 n2 t2 t) = Fix info n1 t1 n2 t2 (desugar t)
-desugar (SIfZ info c t1 t2) = IfZ info (desugar c) (desugar t1) (desugar t2)
-desugar (SLetIn info name [] ty t t') = LetIn info name ty (desugar t) (desugar t')
-desugar (SLetIn info name binds ty t t') = let funTy = (getFunType binds ty) 
-                                               newTerm = SLetIn info name [] funTy (SLam info binds t) t'                                         
-                                            in desugar newTerm
+desugar (SV info var)                      = V info var 
+desugar (SConst info c)                    = Const info c 
+desugar (SLam info binds t)                = foldr (\(name,ty) ti -> Lam info name ty ti) (desugar t) binds 
+desugar (SApp info t1 t2)                  = App info (desugar t1) (desugar t2)
+desugar (SUnaryOpApp info op t)            = BinaryOp info (unaryToBinary op) (desugar t) (Const info (CNat 1))
+desugar (SUnaryOp info op)                 = Lam info "x" SNatTy (desugar (SUnaryOpApp info op (SV info "x")))
+desugar (SBinaryOp info op t1 t2)          = BinaryOp info op (desugar t1) (desugar t2) 
+desugar (SFix info n1 t1 n2 t2 t)          = Fix info n1 t1 n2 t2 (desugar t)
+desugar (SIfZ info c t1 t2)                = IfZ info (desugar c) (desugar t1) (desugar t2)
+desugar (SLetIn info name [] ty t t')      = LetIn info name ty (desugar t) (desugar t')
+desugar (SLetIn info name binds ty t t')   = let funTy   = (getFunType binds ty) 
+                                                 newTerm = SLetIn info name [] funTy (SLam info binds t) t'                                         
+                                              in desugar newTerm
 desugar (SRec info name [(ni,ti)] ty t t') = let fixTerm = SFix info name (SFunTy ti ty) ni ti t 
                                                  newTerm = SLetIn info name [] (SFunTy ti ty) fixTerm t'
                                               in desugar newTerm 
-desugar (SRec info name binds ty t t') = let funTy = (getFunType (tail binds) ty) 
-                                             newTerm = SRec info name [head binds] funTy (SLam info (tail binds) t) t' 
-                                         in desugar newTerm
+desugar (SRec info name binds ty t t')     = let funTy   = (getFunType (tail binds) ty) 
+                                                 newTerm = SRec info name [head binds] funTy (SLam info (tail binds) t) t' 
+                                              in desugar newTerm
                                             
 
 

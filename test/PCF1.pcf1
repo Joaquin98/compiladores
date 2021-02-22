@@ -64,5 +64,8 @@ let expC(a b : N):Nat = expC2 a b 1
 #let res7:Nat = exp 2 3
 #let res8:Nat = fact 5
 
-let x2:Nat = gcd2 12 144
-let a:Nat = (expC 2 4)
+let x2:Nat = gcd 12 144
+let x3:Nat = gcd 18 81
+#let a:Nat = (expC 2 4)
+
+let x4:Nat = let x2:Nat = 343 in x2 

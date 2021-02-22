@@ -1,3 +1,4 @@
+{-
 data Tm info var ty = 
     V info var
   | Const info Const
@@ -8,7 +9,8 @@ data Tm info var ty =
   | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
   | LetIn info Name ty (Tm info var ty) (Tm info var ty)
   deriving (Show, Functor)
-
+-}
+import Lang (freeVars)
 
 isConst :: Term -> Bool
 isConst (Const _ _) = True
@@ -48,6 +50,20 @@ constFolding [] = []
 constFolding (d:ds) = 
   (Decl (declPos d) (declName d) (declType d) (constFolding' (declBody d))) : (constFolding ds)
 
+
+
+usedDecls :: [Decl Term Ty] -> [Name]
+usedDecls decls = foldr (++) [] (map freeVars decls) 
+
+removeUnused :: [Decl Term Ty] -> [Name] -> [Decl Term Ty]
+removeUnused [] names     = []
+removeUnused (d:ds) names = case elem (declName d) names of
+                                False -> removeUnused ds names
+                                True  -> d : (removeUnused ds names)
+
+deadDecls :: [Decl Term Ty] -> [Decl Term Ty]
+deadDecls ds = removeUnused ds (usedDecls ds)
+
 -- ifz 0 then t1 else t2 = t1
 -- ifz n then t1 else t2 = t2
 deadCode' :: Term -> Term
@@ -68,11 +84,14 @@ deadCode' (BinaryOp i op tm1 tm2)        = BinaryOp i op (deadCode' tm1) (deadCo
 deadCode' (Fix i fname fty aname aty tm) = Fix i fname fty aname aty (deadCode' tm)
 deadCode' (LetIn i name ty tm1 tm2)      = LetIn i name ty (deadCode' tm1) (deadCode' tm2)
 
-deadCode :: [Decl Term Ty] -> [Decl Term Ty]
-deadCode [] = []
-deadCode (d:ds) = 
-  (Decl (declPos d) (declName d) (declType d) (deadCode' (declBody d))) : (deadCode ds)
+deadIf :: [Decl Term Ty] -> [Decl Term Ty]
+deadIf []     = []
+deadIf (d:ds) = 
+  (Decl (declPos d) (declName d) (declType d) (deadCode' (declBody d))) : (deadIf ds)
 
+
+deadCode :: [Decl Term Ty] -> [Decl Term Ty]
+deadCode ds = deadDecls (deadIf ds)
 
 
 2) ConstFolding
@@ -83,12 +102,14 @@ deadCode (d:ds) =
 3) DeadCode
 2) ConstFolding
 4) ConstFolding
-5) Expresiones Comunes
+5) Epresiones Comunesx
 
 0) Exp duplicadas
-1) Deadcode 
+1) Deadcode + funcion no usada
 2) Expansion
 3) ConstFolding
+
+Hasta que no se haga ninguna modificación o hasta un limite de ciclos.
 
 4) Deadcode
 5) ConstFolding
@@ -124,18 +145,19 @@ short (d:ds) | size d < maxSize = Just d
              | otherwise        = short ds
 
 
-expansion' :: (Decl Term Ty) -> Term -> Term
-expansion' d (V i var)  | var == declName d = declBody d -- captura variables?
-                        | otherwise         = V i var
-expansion' d (Const i c)                    = (Const i c)
-expansion' d (Lam i name ty tm)             = Lam i name ty (expansion' d tm)
-expansion' d (App i tm1 tm2)                = App i (expansion' d tm1) (expansion' d tm2)
-expansion' d (BinaryOp i op tm1 tm2)        = BinaryOp i op (expansion' d tm1) (expansion' d tm2)
-expansion' d (IfZ i c tm1 tm2)              = IfZ i (expansion' d c) (expansion' d tm1) (expansion' d tm2)
-expansion' d (Fix i fname fty aname aty tm) = Fix i fname fty aname aty (expansion' d tm)
-expansion' d (LetIn i name ty tm1 tm2)      = LetIn i name ty (expansion' d tm1) (expansion' d tm2)
+expansion' :: (Decl Term Ty) -> Term -> State Int Term
+expansion' d tm1@(App i (V i (Free name)) tm2)  | name == (declName d) = App i (expansion' d tm1) (expansion' d tm2)
+                                                | otherwise            = App i (expansion' d tm1) (expansion' d tm2)
+expansion' d (App i tm1 tm2)                    = App i (expansion' d tm1) (expansion' d tm2)
+expansion' d (V i var)                          = V i var
+expansion' d (Const i c)                        = (Const i c)
+expansion' d (Lam i name ty tm)                 = Lam i name ty (expansion' d tm)
+expansion' d (BinaryOp i op tm1 tm2)            = BinaryOp i op (expansion' d tm1) (expansion' d tm2)
+expansion' d (IfZ i c tm1 tm2)                  = IfZ i (expansion' d c) (expansion' d tm1) (expansion' d tm2)
+expansion' d (Fix i fname fty aname aty tm)     = Fix i fname fty aname aty (expansion' d tm)
+expansion' d (LetIn i name ty tm1 tm2)          = LetIn i name ty (expansion' d tm1) (expansion' d tm2)
 
-expansion :: (Decl Term Ty) -> [Decl Term Ty] -> [Decl Term Ty]
+expansion :: (Decl Term Ty) -> [Decl Term Ty] -> State Int [Decl Term Ty]
 expansion decl [] = []
 expansion decl (d:ds) | (declName decl) == (declName d) = expansion ds
                       | otherwise                       = 
@@ -143,3 +165,33 @@ expansion decl (d:ds) | (declName decl) == (declName d) = expansion ds
              
 
 Buscar si se puede hacer más eficiente la búsqueda de Expresiones Comunes
+
+let x = 5 in f x
+let x = 5 in let varnueva = x in f varnueva
+let x = 5 in let x = 8 in x +x
+Varios argumentos?
+
+f y = let x =8 in x +x
+
+maxIterations :: Int
+maxIterations = 5
+
+0) Exp duplicadas
+1) Deadcode + funcion no usada
+2) Expansion
+3) ConstFolding
+
+round :: [Decl Term Ty] -> [Decl Term Ty]
+round ds = constFolding $ expansion $ deadCode $ duplExp ds
+
+optimize' :: Int -> [Decl Term Ty] -> [Decl Term Ty]
+optimize' n ds | n == maxIterations = ds
+               | otherwise          = let res = round ds in 
+                                        if res == ds then ds else optimize' (n+1) res
+                                        -- == MUY COSTOSO? VALE LA PENA UNA MONADA DONDE TENGA INFO DE SI SE MODIFICO ALGO?
+
+optimize :: [Decl Term Ty] -> [Decl Term Ty]
+optimize ds = optimize' 0 ds
+
+- Expansión: Ver lo de la sustitucion en el let (variables ligadas y no ligadas).
+- duplExp: Buscar el algoritmo para implementar.
