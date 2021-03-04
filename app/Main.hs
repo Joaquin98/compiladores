@@ -42,6 +42,7 @@ import LLVM.Pretty ( ppllvm )
 -----------
 import Options.Applicative
 import Bytecompile
+import Optimizations
 
 data Mode = Interactive 
           | Typecheck
@@ -50,6 +51,7 @@ data Mode = Interactive
           | ClosureConvert
           | LLVMConvert
           | LLVMRun
+          | Process
 
 -- Parser de banderas
 parseMode :: Parser Mode
@@ -61,6 +63,7 @@ parseMode =
      <|>  flag' LLVMRun (long "llvmrun" <> short '2' <> help "Ejecuta codigo LLVM")
      <|>  flag' Run (long "run" <> short 'r' <> help "Ejecuta bytecode en la BVM")
      <|>  flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecuta de forma interactiva")
+     <|>  flag' Process (long "process" <> short 'p' <> help "Procesa el programa y lo muestra")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
 parseArgs :: Parser (Mode,[FilePath])
@@ -94,10 +97,26 @@ main = execParser opts >>= go
         go (LLVMRun,files) = let commandline = "clang -Wno-override-module output.ll runtime.c -lgc -o prog; ./prog"
                              in do liftIO $ system commandline
                                    return ()
-              
+        go (Process,files) = do a <- runPCF (runInputT defaultSettings (processedProgram files))
+                                case a of
+                                  Right (Just list) -> do putStrLn $ programToString list
+                                                          return ()
+                                  _ -> return ()
 
-          
-                  
+programToString :: [Decl Term Ty] -> String
+programToString [] = ""
+programToString (d:ds) = termToString (declBody d) ++ "\n" ++ (programToString ds) 
+
+termToString :: Term -> String 
+termToString (V _ v)                        = "(" ++ show v ++ ")"
+termToString (Lang.Const _ (CNat n))        = "(" ++show n ++ ")"
+termToString (BinaryOp i op tm1 tm2)        = "(" ++ (show op) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (Lam i name ty tm)             = "(" ++ "Lam " ++ (termToString tm) ++ ")"
+termToString (App i tm1 tm2)                = "(" ++"App " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (Fix i fname fty aname aty tm) = "(" ++"Fix " ++ (termToString tm) ++ ")"
+termToString (IfZ i c tm1 tm2)              = "(" ++"IfZ " ++ (termToString c) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (LetIn i name ty tm1 tm2)      = "(" ++"Let " ++ name ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+
 compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [IrDecl])
 compileToClosures (arg:args) = do lift $ catchErrors $ makeClosures arg
           
@@ -132,7 +151,7 @@ compileFileLLVM f = do
     decls <- parseIO filename program x
     mapM_ handleDecl' decls
     s <- get
-    let moduleLLVM = codegen $ runCanon $ runCC (reverse(glb s)) in
+    let moduleLLVM = codegen $ runCanon $ runCC (optimize (reverse(glb s))) in
       return moduleLLVM
 
 ------------
@@ -154,7 +173,24 @@ compileFile' f = do
     s <- get
     bytecode <- bytecompileModule (glb s)
     return bytecode
-    
+
+
+processedProgram :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [Decl Term Ty])
+processedProgram (arg:args) = do lift $ catchErrors $ processedProgram' arg
+
+processedProgram' ::  MonadPCF m => String -> m [Decl Term Ty]
+processedProgram' f = do
+    printPCF ("Abriendo "++f++"...")
+    let filename = reverse(dropWhile isSpace (reverse f))
+    x <- liftIO $ catch (readFile filename)
+               (\e -> do let err = show (e :: IOException)
+                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
+                         return "")
+    decls <- parseIO filename program x
+    mapM_ handleDecl' decls
+    s <- get
+    return $ optimize (reverse (glb s))
+
 {-
 declNames :: [Decl Term Ty] -> [Name]
 declNames ds = map (\d -> (declName d)) ds

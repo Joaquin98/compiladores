@@ -1,3 +1,8 @@
+module Optimizations where
+import Lang 
+import Control.Monad.State
+import Subst
+import Common
 {-
 data Tm info var ty = 
     V info var
@@ -10,14 +15,13 @@ data Tm info var ty =
   | LetIn info Name ty (Tm info var ty) (Tm info var ty)
   deriving (Show, Functor)
 -}
-import Lang (freeVars)
 
 isConst :: Term -> Bool
 isConst (Const _ _) = True
 isConst _           = False
 
 getNat :: Const -> Int
-getNat CNat n = n
+getNat (CNat n) = n
 
 reduce :: Term -> Term
 reduce (BinaryOp i Add x (Const _ (CNat 0)))       = x
@@ -53,10 +57,10 @@ constFolding (d:ds) =
 
 
 usedDecls :: [Decl Term Ty] -> [Name]
-usedDecls decls = foldr (++) [] (map freeVars decls) 
+usedDecls decls = foldr (++) [] (map (freeVars . declBody) decls) 
 
 removeUnused :: [Decl Term Ty] -> [Name] -> [Decl Term Ty]
-removeUnused [] names     = []
+removeUnused [x] names    = [x]
 removeUnused (d:ds) names = case elem (declName d) names of
                                 False -> removeUnused ds names
                                 True  -> d : (removeUnused ds names)
@@ -93,7 +97,7 @@ deadIf (d:ds) =
 deadCode :: [Decl Term Ty] -> [Decl Term Ty]
 deadCode ds = deadDecls (deadIf ds)
 
-
+{-
 2) ConstFolding
 3) DeadCode
 
@@ -113,7 +117,7 @@ Hasta que no se haga ninguna modificación o hasta un limite de ciclos.
 
 4) Deadcode
 5) ConstFolding
-
+-}
 
 
 size :: Term -> Int
@@ -139,31 +143,87 @@ height (LetIn i name ty tm1 tm2)      = 1 + (max (height tm1) (height tm2))
 maxSize :: Int
 maxSize = 20
 
-short :: [Decl Term Ty] -> Maybe (Decl Term Ty)
-short []                        = Nothing
-short (d:ds) | size d < maxSize = Just d
-             | otherwise        = short ds
+shortDecl :: [Decl Term Ty] -> Maybe (Decl Term Ty)
+shortDecl []                                   = Nothing   
+shortDecl [x]                                  = Nothing
+shortDecl (d:ds) | size (declBody d) < maxSize = Just d
+                 | otherwise                   = shortDecl ds
 
 
+-- Fijarse que se use el name
+getNewVar :: String -> State Int String
+getNewVar name = do n <- get
+                    modify (\n -> (n+1))
+                    return $ "linexp" ++ name ++ show(n)
+
+-- Fix.
+-- Varias variables.
+-- Expandir Lam que también solucionaría el tema de varias varibles.
+-- Los let tiene nombres iguales si se hacen en distintas llamadas a expansion.
 expansion' :: (Decl Term Ty) -> Term -> State Int Term
-expansion' d tm1@(App i (V i (Free name)) tm2)  | name == (declName d) = App i (expansion' d tm1) (expansion' d tm2)
-                                                | otherwise            = App i (expansion' d tm1) (expansion' d tm2)
-expansion' d (App i tm1 tm2)                    = App i (expansion' d tm1) (expansion' d tm2)
-expansion' d (V i var)                          = V i var
-expansion' d (Const i c)                        = (Const i c)
-expansion' d (Lam i name ty tm)                 = Lam i name ty (expansion' d tm)
-expansion' d (BinaryOp i op tm1 tm2)            = BinaryOp i op (expansion' d tm1) (expansion' d tm2)
-expansion' d (IfZ i c tm1 tm2)                  = IfZ i (expansion' d c) (expansion' d tm1) (expansion' d tm2)
-expansion' d (Fix i fname fty aname aty tm)     = Fix i fname fty aname aty (expansion' d tm)
-expansion' d (LetIn i name ty tm1 tm2)          = LetIn i name ty (expansion' d tm1) (expansion' d tm2)
+expansion' d (App i (V j (Free name)) (V k var))         | name == (declName d) = return $ subst (V k var) (declBody d)
+expansion' d (App i (V j (Free name)) (Const k (CNat n)))  | name == (declName d) = return $ subst (Const k (CNat n)) (declBody d)
+expansion' d (App i (V j (Free name)) tm2)               | name == (declName d) = do newVar <- getNewVar ""
+                                                                                     case (declBody d) of 
+                                                                                       (Lam k nameVar ty tm) -> (expansion' d (LetIn NoPos newVar ty tm2 tm))
+                                                                                       x -> return x
+expansion' d (App i (Lam _ name ty tm) (V k var))                        = return $ subst (V k var) (tm)
+expansion' d (App i (Lam _ name ty tm) (Const k (CNat n)))               = return $ subst (Const k (CNat n)) (tm)
+expansion' d (App i (Lam _ name ty tm) tm2)                              = do newVar <- getNewVar ""
+                                                                              expansion' d (LetIn NoPos newVar ty tm2 tm)                                                                       
+expansion' d (App i tm1 tm2)                                             = do tm1' <- expansion' d tm1
+                                                                              tm2' <- expansion' d tm2
+                                                                              return $ App i tm1' tm2'
+expansion' d (V i (Free name))                    | name == (declName d) = return (declBody d)
+expansion' d (V i var)                                                   = return $ V i var
+{-
+(Lam (Add (1) (Bound 0)))
+
+(Lam (Lam (Add (Bound 1) (Free "z1"))))
+(4)
+
+(App (Lam (Lam (Add 1 (Free "z1")))) (1))
+
+let suma (x y:Nat):Nat = x + y 
+let z1:Nat = 4
+
+let ans:Nat = suma z1 1
+
+(App (Let linexp0 (App (Lam (Lam (Diff (Bound 1) (Bound 0)))) (4)) (Lam (Add (Bound 1) (Bound 0)))) (1))
+
+--let suma (x y:Nat):Nat = x + y 
+--let resta (x y:Nat):Nat = x - y
+
+--app suma (Lam ...)
+--let ans:Nat = suma (resta 5 4) 1
+
+-}
+-------------------------------------------------------------------
+
+expansion' d (Const i c)                        = return (Const i c)
+expansion' d (Lam i name ty tm)                 = do tm'  <- expansion' d tm
+                                                     return $ Lam i name ty tm'
+expansion' d (BinaryOp i op tm1 tm2)            = do tm1' <- expansion' d tm1
+                                                     tm2' <- expansion' d tm2
+                                                     return $ BinaryOp i op tm1' tm2'
+expansion' d (IfZ i c tm1 tm2)                  = do c'   <- expansion' d c
+                                                     tm1' <- expansion' d tm1
+                                                     tm2' <- expansion' d tm2
+                                                     return $ IfZ i c' tm1' tm2'
+expansion' d (Fix i fname fty aname aty tm)     = do tm'  <- expansion' d tm
+                                                     return $ Fix i fname fty aname aty tm'
+expansion' d (LetIn i name ty tm1 tm2)          = do tm1' <- expansion' d tm1
+                                                     tm2' <- expansion' d tm2
+                                                     return $ LetIn i name ty tm1' tm2'
 
 expansion :: (Decl Term Ty) -> [Decl Term Ty] -> State Int [Decl Term Ty]
-expansion decl [] = []
-expansion decl (d:ds) | (declName decl) == (declName d) = expansion ds
-                      | otherwise                       = 
-                        (Decl (declPos d) (declName d) (declType d) (expansion' decl (declBody d))) : (expansion ds)
+expansion decl [] = return []
+expansion decl (d:ds) | (declName decl) == (declName d) = expansion decl ds
+                      | otherwise                       = do list <- expansion decl ds
+                                                             expBody <- expansion' decl (declBody d)
+                                                             return $ (Decl (declPos d) (declName d) (declType d) (expBody)) : list
              
-
+{-}
 Buscar si se puede hacer más eficiente la búsqueda de Expresiones Comunes
 
 let x = 5 in f x
@@ -171,27 +231,46 @@ let x = 5 in let varnueva = x in f varnueva
 let x = 5 in let x = 8 in x +x
 Varios argumentos?
 
-f y = let x =8 in x +x
+f y = let x =8 in x + x
 
-maxIterations :: Int
-maxIterations = 5
+
 
 0) Exp duplicadas
 1) Deadcode + funcion no usada
 2) Expansion
 3) ConstFolding
+-}
 
-round :: [Decl Term Ty] -> [Decl Term Ty]
-round ds = constFolding $ expansion $ deadCode $ duplExp ds
+maxIterations :: Int
+maxIterations = 5
+
+duplExp = id
+
+
+expansionTotal :: [Decl Term Ty] -> [Decl Term Ty]
+expansionTotal ds = case shortDecl ds of
+                      Nothing -> ds
+                      Just d  -> expansionTotal $ fst (runState (expansion d ds) 0) 
+
+optRound :: [Decl Term Ty] -> [Decl Term Ty]
+optRound ds = constFolding $ expansionTotal $ deadCode $ duplExp ds
+
+
+
 
 optimize' :: Int -> [Decl Term Ty] -> [Decl Term Ty]
 optimize' n ds | n == maxIterations = ds
-               | otherwise          = let res = round ds in 
+               | otherwise          = let res = optRound ds in 
                                         if res == ds then ds else optimize' (n+1) res
                                         -- == MUY COSTOSO? VALE LA PENA UNA MONADA DONDE TENGA INFO DE SI SE MODIFICO ALGO?
+
+
+
 
 optimize :: [Decl Term Ty] -> [Decl Term Ty]
 optimize ds = optimize' 0 ds
 
+{-}
 - Expansión: Ver lo de la sustitucion en el let (variables ligadas y no ligadas).
 - duplExp: Buscar el algoritmo para implementar.
+-}

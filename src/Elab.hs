@@ -28,8 +28,8 @@ convertType  = do
 rmvSynTerm :: MonadPCF m => SNTerm -> m (NTerm)
 rmvSynTerm (V i name)                = return (V i name)  
 rmvSynTerm (Const i c)               = return (Const i c)  
-rmvSynTerm (Lam i name ty t)         = do nty <- styToTy ty
-                                          tTy <- rmvSynTerm t
+rmvSynTerm (Lam i name ty t)         = do nty  <- styToTy ty
+                                          tTy  <- rmvSynTerm t
                                           return (Lam i name nty tTy)  
 rmvSynTerm (App i t1 t2)             = do t1Ty <- rmvSynTerm t1
                                           t2Ty <- rmvSynTerm t2
@@ -39,16 +39,16 @@ rmvSynTerm (App i t1 t2)             = do t1Ty <- rmvSynTerm t1
 rmvSynTerm (BinaryOp i op t1 t2)     = do t1Ty <- rmvSynTerm t1
                                           t2Ty <- rmvSynTerm t2
                                           return (BinaryOp i op t1Ty t2Ty)                                   
-rmvSynTerm (Fix i n1 sty1 n2 sty2 t) = do ty1 <- styToTy sty1
-                                          ty2 <- styToTy sty2  
-                                          tTy <- rmvSynTerm t
+rmvSynTerm (Fix i n1 sty1 n2 sty2 t) = do ty1  <- styToTy sty1
+                                          ty2  <- styToTy sty2  
+                                          tTy  <- rmvSynTerm t
                                           return (Fix i n1 ty1 n2 ty2 tTy)
-rmvSynTerm (IfZ i c t1 t2)           = do cTy <- rmvSynTerm c
+rmvSynTerm (IfZ i c t1 t2)           = do cTy  <- rmvSynTerm c
                                           t1Ty <- rmvSynTerm t1
                                           t2Ty <- rmvSynTerm t2
                                           return (IfZ i cTy t1Ty t2Ty)
-rmvSynTerm (LetIn i n ty t t')       = do nty <- styToTy ty
-                                          tTy <- rmvSynTerm t
+rmvSynTerm (LetIn i n ty t t')       = do nty  <- styToTy ty
+                                          tTy  <- rmvSynTerm t
                                           tTy' <- rmvSynTerm t'
                                           return (LetIn i n nty tTy tTy')
 

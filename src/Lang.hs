@@ -36,18 +36,18 @@ data STy =
 type Name = String
 
 data Const = CNat Int
-  deriving Show
+  deriving (Show,Eq)
 
 data UnaryOp = Succ | Pred | Print
-  deriving Show
+  deriving (Show,Eq)
 
 data BinaryOp = Add | Diff
-  deriving Show
+  deriving (Show,Eq)
 
 -- | tipo de datos de declaraciones, parametrizado por el tipo del cuerpo de la declaración
 data Decl a b =
     Decl { declPos :: Pos, declName :: Name, declType:: b, declBody :: a}
-  deriving (Show,Functor)
+  deriving (Show,Functor,Eq)
 
 data SDecl term bind ty =
     DTer Pos Name [(bind, ty)] STy Bool term 
@@ -84,7 +84,7 @@ data Tm info var ty =
   | Fix info Name ty Name ty (Tm info var ty)
   | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
   | LetIn info Name ty (Tm info var ty) (Tm info var ty)
-  deriving (Show, Functor)
+  deriving (Show, Functor, Eq)
 
 
 data STm info var bind ty = 
@@ -118,7 +118,7 @@ type Term = Tm Pos Var Ty    -- ^ 'Tm' con índices de De Bruijn como variables 
 data Var = 
     Bound !Int
   | Free Name
-  deriving Show
+  deriving (Show,Eq)
 
 
 data IrTm = IrVar Name
