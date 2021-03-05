@@ -20,7 +20,7 @@ import Control.Monad.Trans
 import Data.List (nub,  intersperse, isPrefixOf )
 import Data.Char ( isSpace )
 import Control.Exception ( catch , IOException )
-import System.Environment ( getArgs )
+import System.Environment ()
 import System.IO ( stderr, hPutStr )
 import System.Process
 
@@ -28,7 +28,7 @@ import Global ( GlEnv(..) )
 import Errors
 import Lang
 import Parse ( P, tm, program, declOrTm, runP )
-import Elab ( elab , elabD, rmvSynTerm, styToTy)
+import Elab ( elab , elabD, styToTy)
 --import Eval ( eval )
 import CEK (eval)
 import PPrint ( pp , ppTy )
@@ -36,7 +36,7 @@ import MonadPCF
 import TypeChecker ( tc, tcDecl )
 import Closures (runCC,printIrDecls)
 import InstSel (codegen,Module)
-import CIR (runCanon,CanonProg)
+import CIR (runCanon)
 import Data.Text.Lazy.IO as TIO ( writeFile )
 import LLVM.Pretty ( ppllvm )
 -----------
@@ -79,7 +79,7 @@ main = execParser opts >>= go
         go (Interactive,files) = do runPCF (runInputT defaultSettings (main' files))
                                     return ()
         go (Typecheck,files) = undefined
-        go (Bytecompile,files) = do a <- runPCF (runInputT defaultSettings (compileToBytecode files))
+        go (Bytecompile,files) = do a <- runPCF (runInputT defaultSettings ((finishCompile.compileToBytecode) files))
                                     case a of
                                       Right (Just bytecode) -> do putStrLn $ show bytecode
                                                                   bcWrite bytecode "a.bytecode"
@@ -88,79 +88,72 @@ main = execParser opts >>= go
         go (Run,files) = do bytecode <- bcRead (head files)
                             runBC bytecode
                             return ()
-        go (ClosureConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToClosures files))
+        go (ClosureConvert,files) = do a <- runPCF (runInputT defaultSettings ((finishCompile.compileToClosures) files))
                                        case a of
                                          Right (Just closures) -> do printIrDecls closures
-        go (LLVMConvert,files) = do a <- runPCF (runInputT defaultSettings (compileToLLVM files))
+                                         _                     -> return ()
+        go (LLVMConvert,files) = do a <- runPCF (runInputT defaultSettings ((finishCompile.compileToLLVM) files))
                                     case a of
-                                      Right (Just llvm) -> do liftIO $ TIO.writeFile "output.ll" (ppllvm llvm) 
+                                      Right (Just llvm) -> do liftIO $ TIO.writeFile "output.ll" (ppllvm llvm)
+                                      _                 -> return () 
         go (LLVMRun,files) = let commandline = "clang -Wno-override-module output.ll runtime.c -lgc -o prog; ./prog"
                              in do liftIO $ system commandline
                                    return ()
-        go (Process,files) = do a <- runPCF (runInputT defaultSettings (processedProgram files))
+        go (Process,files) = do a <- runPCF (runInputT defaultSettings ((finishCompile.processedProgram) files))
                                 case a of
                                   Right (Just list) -> do putStrLn $ programToString list
                                                           return ()
                                   _ -> return ()
 
+
+
 programToString :: [Decl Term Ty] -> String
 programToString [] = ""
-programToString (d:ds) = termToString (declBody d) ++ "\n" ++ (programToString ds) 
+programToString (d:ds) = (declName d) ++ ": " ++ termToString (declBody d) ++ "\n" ++ (programToString ds) 
 
 termToString :: Term -> String 
-termToString (V _ v)                        = "(" ++ show v ++ ")"
-termToString (Lang.Const _ (CNat n))        = "(" ++show n ++ ")"
-termToString (BinaryOp i op tm1 tm2)        = "(" ++ (show op) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
-termToString (Lam i name ty tm)             = "(" ++ "Lam " ++ (termToString tm) ++ ")"
-termToString (App i tm1 tm2)                = "(" ++"App " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
-termToString (Fix i fname fty aname aty tm) = "(" ++"Fix " ++ (termToString tm) ++ ")"
-termToString (IfZ i c tm1 tm2)              = "(" ++"IfZ " ++ (termToString c) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
-termToString (LetIn i name ty tm1 tm2)      = "(" ++"Let " ++ name ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
-
-compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [IrDecl])
-compileToClosures (arg:args) = do lift $ catchErrors $ makeClosures arg
-          
-makeClosures ::  MonadPCF m => String -> m ([IrDecl])
-makeClosures f = do
-    printPCF ("Abriendo "++f++"...")
-    let filename = reverse(dropWhile isSpace (reverse f))
-    x <- liftIO $ catch (readFile filename)
-               (\e -> do let err = show (e :: IOException)
-                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
-                         return "")
-    decls <- parseIO filename program x
-    mapM_ handleDecl' decls
-    s <- get
-    let closures = runCC (glb s) in
-      return $ closures
+termToString (V _ v)                         = "(" ++ show v ++ ")"
+termToString (Lang.Const _ (CNat n))         = "(" ++ show n ++ ")"
+termToString (BinaryOp i op tm1 tm2)         = "(" ++ (show op) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (Lam i name ty tm1)             = "(" ++ "Lam " ++ (termToString tm1) ++ ")"
+termToString (App i tm1 tm2)                 = "(" ++"App " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (Fix i fname fty aname aty tm1) = "(" ++"Fix " ++ (termToString tm1) ++ ")"
+termToString (IfZ i c tm1 tm2)               = "(" ++"IfZ " ++ (termToString c) ++ " " ++ (termToString tm1) ++ " " ++ (termToString tm2) ++ ")"
+termToString (LetIn i name ty tm1 tm2)       = "(" ++"Let " ++ name ++ " " ++ (termToString tm1) ++ " in " ++ (termToString tm2) ++ ")"
 
 
-compileToLLVM :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe Module)
-compileToLLVM (arg:args) = do lift $ catchErrors $ compileFileLLVM arg
+finishCompile :: (MonadPCF m, MonadMask m) => m a -> InputT m (Maybe a)
+finishCompile m = do lift $ catchErrors m
 
-{- Compile file que haga la parte común y que retorne la lista de declaraciones
-   ya procesadas. -}
-compileFileLLVM ::  MonadPCF m => String -> m (Module)
-compileFileLLVM f = do
-    printPCF ("Abriendo "++f++"...")
-    let filename = reverse(dropWhile isSpace (reverse f))
-    x <- liftIO $ catch (readFile filename)
-               (\e -> do let err = show (e :: IOException)
-                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
-                         return "")
-    decls <- parseIO filename program x
-    mapM_ handleDecl' decls
-    s <- get
-    let moduleLLVM = codegen $ runCanon $ runCC (optimize (reverse(glb s))) in
-      return moduleLLVM
+compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> m ([IrDecl])
+compileToClosures []         = undefined
+compileToClosures (arg:args) = do compileFile' arg 
+                                  s <- get
+                                  return $ runCC (glb s)
 
-------------
--- AGREGADO (NO COPIADO DEL APUNTE) 
+compileToBytecode :: (MonadPCF m, MonadMask m) => [String] -> m (Bytecode)
+compileToBytecode []         = undefined
+compileToBytecode (arg:args) = do compileFile' arg
+                                  s <- get 
+                                  bytecompileModule (glb s)
 
-compileToBytecode :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe Bytecode)
-compileToBytecode (arg:args) = do lift $ catchErrors $ compileFile' arg
-          
-compileFile' ::  MonadPCF m => String -> m (Bytecode)
+
+compileToLLVM :: (MonadPCF m, MonadMask m) => [String] -> m (Module)
+compileToLLVM []         = undefined
+compileToLLVM (arg:args) = do compileFile' arg
+                              s <- get
+                              return $  (codegen . runCanon . runCC .  reverse) (glb s)
+
+processedProgram :: (MonadPCF m, MonadMask m) => [String] -> m ([Decl Term Ty])
+processedProgram []         = undefined
+processedProgram (arg:args) = do compileFile' arg
+                                 s <- get
+                                 return $  (reverse (glb s)) ++ ((optimize . reverse) (glb s)) 
+
+
+
+
+compileFile' ::  MonadPCF m => String -> m ()
 compileFile' f = do
     printPCF ("Abriendo "++f++"...")
     let filename = reverse(dropWhile isSpace (reverse f))
@@ -170,35 +163,6 @@ compileFile' f = do
                          return "")
     decls <- parseIO filename program x
     mapM_ handleDecl' decls
-    s <- get
-    bytecode <- bytecompileModule (glb s)
-    return bytecode
-
-
-processedProgram :: (MonadPCF m, MonadMask m) => [String] -> InputT m (Maybe [Decl Term Ty])
-processedProgram (arg:args) = do lift $ catchErrors $ processedProgram' arg
-
-processedProgram' ::  MonadPCF m => String -> m [Decl Term Ty]
-processedProgram' f = do
-    printPCF ("Abriendo "++f++"...")
-    let filename = reverse(dropWhile isSpace (reverse f))
-    x <- liftIO $ catch (readFile filename)
-               (\e -> do let err = show (e :: IOException)
-                         hPutStr stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err ++"\n")
-                         return "")
-    decls <- parseIO filename program x
-    mapM_ handleDecl' decls
-    s <- get
-    return $ optimize (reverse (glb s))
-
-{-
-declNames :: [Decl Term Ty] -> [Name]
-declNames ds = map (\d -> (declName d)) ds
-
-toLetIn :: [Decl Term Ty] -> Term
-toLetIn [l] =  (declBody l)
-toLetIn (l:ls) =  App (declPos l) (Lam (declPos l) (declName l) (declType l) (declBody l)) (toLetIn ls)
--}
 
 handleDecl' :: MonadPCF m => SDecl SMNTerm MultiBind STy -> m ()
 handleDecl' decl = do let ed = elabD decl
@@ -215,18 +179,10 @@ handleTermDecl' (Decl p name sty termSty) = do
         addDecl (Decl p name ty tt) 
 
 
-
--- FIN PARTE NUEVA 
-
-
 prompt :: String
 prompt = "PCF> "
-{-
-main :: IO ()
-main = do args <- getArgs
-          runPCF (runInputT defaultSettings (main' args))
-          return ()
--}        
+
+
 main' :: (MonadPCF m, MonadMask m) => [String] -> InputT m ()
 main' args = do
         lift $ catchErrors $ compileFiles args
@@ -290,6 +246,7 @@ handleTypeDecl (DType i name sty) = do ty <- styToTy sty
                                        case mty of 
                                          Just _ -> failPosPCF i $ name ++" ya existe como sinonimo de tipo"
                                          Nothing ->  addSynTy name ty
+handleTypeDecl _                  = undefined
                                                       
 
 data Command = Compile CompileForm
@@ -401,5 +358,3 @@ typeCheckPhrase x = do
          ty <- tc tt (tyEnv s)
          printPCF (ppTy ty)
 
-
---(fix (suma : Nat -> Nat -> Nat) (x : Nat) -> fun (y : Nat) -> ifz y then x else suma (succ x) (pred y)) 2 3 
