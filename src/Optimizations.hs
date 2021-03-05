@@ -20,22 +20,35 @@ reduce (BinaryOp i Diff (Const _ c1) (Const _ c2)) = (Const i (CNat ((getNat c1)
 reduce x = x
 
 
-constFolding' :: Term -> Term
+constFolding' :: Term -> State (Bool, Int) Term
 -- casos optimizacion
-constFolding' (BinaryOp i op tm1 tm2)        = reduce $ BinaryOp i op (constFolding' tm1) (constFolding' tm2)
+constFolding' (BinaryOp i op tm1 tm2)        = do modify (\(_,n) -> (True,n))
+                                                  tm1' <- constFolding' tm1
+                                                  tm2' <- constFolding' tm2
+                                                  return $ reduce $ BinaryOp i op tm1' tm2'
 -- casos recursivos
-constFolding' (V i var)                      = V i var
-constFolding' (Const i c)                    = (Const i c)
-constFolding' (Lam i name ty tm)             = Lam i name ty (constFolding' tm)
-constFolding' (App i tm1 tm2)                = App i (constFolding' tm1) (constFolding' tm2)
-constFolding' (Fix i fname fty aname aty tm) = Fix i fname fty aname aty (constFolding' tm)
-constFolding' (IfZ i c tm1 tm2)              = IfZ i (constFolding' c) (constFolding' tm1) (constFolding' tm2)
-constFolding' (LetIn i name ty tm1 tm2)      = LetIn i name ty (constFolding' tm1) (constFolding' tm2)
+constFolding' (V i var)                      = return $ V i var
+constFolding' (Const i c)                    = return $ Const i c
+constFolding' (Lam i name ty tm)             = do tm'  <- constFolding' tm
+                                                  return $ Lam i name ty tm'
+constFolding' (App i tm1 tm2)                = do tm1' <- constFolding' tm1
+                                                  tm2' <- constFolding' tm2
+                                                  return $ App i tm1' tm2'
+constFolding' (Fix i fname fty aname aty tm) = do tm'  <- constFolding' tm
+                                                  return $ Fix i fname fty aname aty tm'
+constFolding' (IfZ i c tm1 tm2)              = do c'   <- constFolding' c
+                                                  tm1' <- constFolding' tm1
+                                                  tm2' <- constFolding' tm2
+                                                  return $ IfZ i c' tm1' tm2'
+constFolding' (LetIn i name ty tm1 tm2)      = do tm1' <- constFolding' tm1
+                                                  tm2' <- constFolding' tm2
+                                                  return $ LetIn i name ty tm1' tm2'
 
-constFolding :: [Decl Term Ty] -> [Decl Term Ty]
-constFolding [] = []
-constFolding (d:ds) = 
-  (Decl (declPos d) (declName d) (declType d) (constFolding' (declBody d))) : (constFolding ds)
+constFolding :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+constFolding [] = return []
+constFolding (d:ds) = do body <- constFolding' (declBody d)
+                         rest <- constFolding ds
+                         return $ (Decl (declPos d) (declName d) (declType d) body) : rest
 
 
 ---------------------------------------------------------------------
@@ -45,42 +58,55 @@ constFolding (d:ds) =
 usedDecls :: [Decl Term Ty] -> [Name]
 usedDecls decls = foldr (++) [] (map (freeVars . declBody) decls) 
 
-removeUnused :: [Decl Term Ty] -> [Name] -> [Decl Term Ty]
-removeUnused [x] names    = [x]
+removeUnused :: [Decl Term Ty] -> [Name] -> State (Bool, Int) [Decl Term Ty]
+removeUnused [x] names    = return $ [x]
 removeUnused (d:ds) names = case elem (declName d) names of
-                                False -> removeUnused ds names
-                                True  -> d : (removeUnused ds names)
+                                False -> do modify (\(_,n) -> (True,n))
+                                            removeUnused ds names
+                                True  -> do ds' <- removeUnused ds names
+                                            return $ d:ds'
 
-deadDecls :: [Decl Term Ty] -> [Decl Term Ty]
+deadDecls :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
 deadDecls ds = removeUnused ds (usedDecls ds)
 
 
-deadIf' :: Term -> Term
+deadIf' :: Term -> State (Bool, Int) Term
 -- casos optimizacion
-deadIf' (IfZ i c tm1 tm2) = let c'   = deadIf' c
-                                tm1' = deadIf' tm1
-                                tm2' = deadIf' tm2
-                            in case c' of
-                                 Const _ (CNat 0) -> tm1' -- ifz 0 then t1 else t2 = t1
-                                 Const _ (CNat n) -> tm2' -- ifz n then t1 else t2 = t2
-                                 _                -> IfZ i c' tm1' tm2' 
+deadIf' (IfZ i c tm1 tm2) = do modify (\(_,n) -> (True,n))
+                               c'   <- deadIf' c
+                               tm1' <- deadIf' tm1
+                               tm2' <- deadIf' tm2
+                               case c' of
+                                 Const _ (CNat 0) -> return tm1' -- ifz 0 then t1 else t2 = t1
+                                 Const _ (CNat n) -> return tm2' -- ifz n then t1 else t2 = t2
+                                 _                -> return $ IfZ i c' tm1' tm2' 
 -- casos recursivos
-deadIf' (V i var)                      = V i var
-deadIf' (Const i c)                    = (Const i c)
-deadIf' (Lam i name ty tm)             = Lam i name ty (deadIf' tm)
-deadIf' (App i tm1 tm2)                = App i (deadIf' tm1) (deadIf' tm2)
-deadIf' (BinaryOp i op tm1 tm2)        = BinaryOp i op (deadIf' tm1) (deadIf' tm2)
-deadIf' (Fix i fname fty aname aty tm) = Fix i fname fty aname aty (deadIf' tm)
-deadIf' (LetIn i name ty tm1 tm2)      = LetIn i name ty (deadIf' tm1) (deadIf' tm2)
+deadIf' (V i var)                      = return $ V i var
+deadIf' (Const i c)                    = return $ Const i c
+deadIf' (Lam i name ty tm)             = do tm'  <- deadIf' tm
+                                            return $ Lam i name ty tm'
+deadIf' (App i tm1 tm2)                = do tm1' <- deadIf' tm1
+                                            tm2' <- deadIf' tm2
+                                            return $ App i tm1' tm2'
+deadIf' (BinaryOp i op tm1 tm2)        = do tm1' <- deadIf' tm1
+                                            tm2' <- deadIf' tm2
+                                            return $ BinaryOp i op tm1' tm2'
+deadIf' (Fix i fname fty aname aty tm) = do tm'  <- deadIf' tm
+                                            return $ Fix i fname fty aname aty tm'
+deadIf' (LetIn i name ty tm1 tm2)      = do tm1' <- deadIf' tm1
+                                            tm2' <- deadIf' tm2
+                                            return $ LetIn i name ty tm1' tm2'
 
 
-deadIf :: [Decl Term Ty] -> [Decl Term Ty]
-deadIf []     = []
-deadIf (d:ds) = 
-  (Decl (declPos d) (declName d) (declType d) (deadIf' (declBody d))) : (deadIf ds)
+deadIf :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+deadIf []     = return []
+deadIf (d:ds) = do body <- deadIf' (declBody d)
+                   rest <- deadIf ds
+                   return $ (Decl (declPos d) (declName d) (declType d) body) : rest
 
-deadCode :: [Decl Term Ty] -> [Decl Term Ty]
-deadCode ds = deadDecls (deadIf ds)
+deadCode :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+deadCode ds = do ifs <- deadIf ds
+                 deadDecls ifs
 
 
 ---------------------------------------------------------------------
@@ -118,82 +144,93 @@ shortDecl (d:ds) | size (declBody d) < maxSize = Just d
 
 
 -- Fijarse que se use el name
-getNewVar :: String -> State Int String
+getNewVar :: String -> State (Bool, Int) String
 getNewVar name = do n <- get
-                    modify (\n -> (n+1))
+                    modify (\(b,n) -> (b,n+1))
                     return $ "linexp" ++ name ++ show(n)
 
 
 -- EXPANSIÓN DE DECLARACIONES CORTAS:
 
 -- Los let tiene nombres iguales si se hacen en distintas llamadas a expansion.
-expDecls' :: (Decl Term Ty) -> Term -> State Int Term
+expDecl' :: (Decl Term Ty) -> Term -> State (Bool, Int) Term
 -- casos optimización
-expDecls' d (App i (V j (Free name)) (V k var))          | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> return $ subst (V k var) tm
+expDecl' d (App i (V j (Free name)) (V k var))          | name == (declName d) = case (declBody d) of
+                                                                                    (Lam _ nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                                                return $ subst (V k var) tm
                                                                                     fix                   -> return fix
-expDecls' d (App i (V j (Free name)) (Const k (CNat n))) | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> return $ subst (Const k (CNat n)) tm
+expDecl' d (App i (V j (Free name)) (Const k (CNat n))) | name == (declName d) = case (declBody d) of
+                                                                                    (Lam _ nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                                                return $ subst (Const k (CNat n)) tm
                                                                                     fix                   -> return fix
-expDecls' d (App i (V j (Free name)) tm2)                | name == (declName d) = do newVar <- getNewVar ""
-                                                                                     case (declBody d) of 
-                                                                                       (Lam k nameVar ty tm) -> (expDecls' d (LetIn NoPos newVar ty tm2 tm))
+expDecl' d (App i (V j (Free name)) tm2)                | name == (declName d) = do newVar <- getNewVar ""
+                                                                                    case (declBody d) of 
+                                                                                       (Lam k nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                                                   (expDecl' d (LetIn NoPos newVar ty tm2 tm))
                                                                                        fix                   -> return fix  
-expDecls' d (V i (Free name))                            | name == (declName d) = return (declBody d)  
+expDecl' d (V i (Free name))                            | name == (declName d) = do modify (\(_,n) -> (True,n))
+                                                                                    return (declBody d)  
 
 -- casos recursivos                                                                                                 
-expDecls' d (App i tm1 tm2)                = do tm1' <- expDecls' d tm1
-                                                tm2' <- expDecls' d tm2
-                                                return $ App i tm1' tm2'
-expDecls' d (V i var)                      = return $ V i var
-expDecls' d (Const i c)                    = return (Const i c)
-expDecls' d (Lam i name ty tm)             = do tm'  <- expDecls' d tm
-                                                return $ Lam i name ty tm'
-expDecls' d (BinaryOp i op tm1 tm2)        = do tm1' <- expDecls' d tm1
-                                                tm2' <- expDecls' d tm2
-                                                return $ BinaryOp i op tm1' tm2'
-expDecls' d (IfZ i c tm1 tm2)              = do c'   <- expDecls' d c
-                                                tm1' <- expDecls' d tm1
-                                                tm2' <- expDecls' d tm2
-                                                return $ IfZ i c' tm1' tm2'
-expDecls' d (Fix i fname fty aname aty tm) = do tm'  <- expDecls' d tm
-                                                return $ Fix i fname fty aname aty tm'
-expDecls' d (LetIn i name ty tm1 tm2)      = do tm1' <- expDecls' d tm1
-                                                tm2' <- expDecls' d tm2
-                                                return $ LetIn i name ty tm1' tm2'
+expDecl' d (App i tm1 tm2)                = do tm1' <- expDecl' d tm1
+                                               tm2' <- expDecl' d tm2
+                                               return $ App i tm1' tm2'
+expDecl' d (V i var)                      = return $ V i var
+expDecl' d (Const i c)                    = return (Const i c)
+expDecl' d (Lam i name ty tm)             = do tm'  <- expDecl' d tm
+                                               return $ Lam i name ty tm'
+expDecl' d (BinaryOp i op tm1 tm2)        = do tm1' <- expDecl' d tm1
+                                               tm2' <- expDecl' d tm2
+                                               return $ BinaryOp i op tm1' tm2'
+expDecl' d (IfZ i c tm1 tm2)              = do c'   <- expDecl' d c
+                                               tm1' <- expDecl' d tm1
+                                               tm2' <- expDecl' d tm2
+                                               return $ IfZ i c' tm1' tm2'
+expDecl' d (Fix i fname fty aname aty tm) = do tm'  <- expDecl' d tm
+                                               return $ Fix i fname fty aname aty tm'
+expDecl' d (LetIn i name ty tm1 tm2)      = do tm1' <- expDecl' d tm1
+                                               tm2' <- expDecl' d tm2
+                                               return $ LetIn i name ty tm1' tm2'
 
 
-expDecls :: (Decl Term Ty) -> [Decl Term Ty] -> State Int [Decl Term Ty]
-expDecls decl [] = return []
-expDecls decl (d:ds) | (declName decl) == (declName d)  = expDecls decl ds
-                     | otherwise                        = do list <- expDecls decl ds
-                                                             expBody <- expDecls' decl (declBody d)
+expDecl :: (Decl Term Ty) -> [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+expDecl decl [] = return []
+expDecl decl (d:ds) | (declName decl) == (declName d)  = expDecl decl ds
+                     | otherwise                        = do list <- expDecl decl ds
+                                                             expBody <- expDecl' decl (declBody d)
                                                              return $ (Decl (declPos d) (declName d) (declType d) (expBody)) : list
 
-expansionD :: [Decl Term Ty] -> [Decl Term Ty]
-expansionD ds = case shortDecl ds of
-                      Nothing -> ds
-                      Just d  -> expansionD $ fst (runState (expDecls d ds) 0) 
+expDecls :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+expDecls ds = case shortDecl ds of
+                      Nothing -> return ds
+                      Just d  -> do explist <- expDecl d ds
+                                    expDecls explist
+
 
 -- EXPANSIÓN DE EXPRESIONES INTERNAS:
 -- expandimos llamadas a funciones Lam 
 --y Lets que tengan una variable o constante
 
-expInt' ::  Term -> State Int Term
+expInt' ::  Term -> State (Bool, Int) Term
 -- casos optimización
-expInt' (App i (Lam _ name ty tm) (V k var))          = return $ subst (V k var) (tm)
-expInt' (App i (Lam _ name ty tm) (Const k (CNat n))) = return $ subst (Const k (CNat n)) (tm)
+expInt' (App i (Lam _ name ty tm) (V k var))          = do modify (\(_,n) -> (True,n))
+                                                           return $ subst (V k var) (tm)
+expInt' (App i (Lam _ name ty tm) (Const k (CNat n))) = do modify (\(_,n) -> (True,n))
+                                                           return $ subst (Const k (CNat n)) (tm)
 expInt' (App i (Lam _ name ty tm) tm2)                = do newVar <- getNewVar ""
+                                                           modify (\(_,n) -> (True,n))
                                                            expInt' (LetIn NoPos newVar ty tm2 tm)                                                                       
+expInt' (LetIn i name ty (V k var) tm2)               = do modify (\(_,n) -> (True,n))
+                                                           return $ subst (V k var) (tm2)
+expInt' (LetIn i name ty (Const k (CNat n)) tm2)      = do modify (\(_,n) -> (True,n))
+                                                           return $ subst (Const k (CNat n)) (tm2)
+-- casos recursivos
 expInt' (App i tm1 tm2)                               = do tm1' <- expInt' tm1
                                                            tm2' <- expInt' tm2
-                                                           return $ App i tm1' tm2'
-expInt' (LetIn i name ty (V k var) tm2)               = return $ subst (V k var) (tm2)
-expInt' (LetIn i name ty (Const k (CNat n)) tm2)      = return $ subst (Const k (CNat n)) (tm2)
+                                                           return $ App i tm1' tm2'                                                           
 expInt' (LetIn i name ty tm1 tm2)                     = do tm1' <- expInt' tm1
                                                            tm2' <- expInt' tm2
-                                                           return $ LetIn i name ty tm1' tm2'
--- casos recursivos                                                           
+                                                           return $ LetIn i name ty tm1' tm2'                                                           
 expInt' (V i var)                                     = return $ V i var
 expInt' (Const i c)                                   = return (Const i c)
 expInt' (Lam i name ty tm)                            = do tm'  <- expInt' tm
@@ -209,14 +246,11 @@ expInt' (Fix i fname fty aname aty tm)                = do tm'  <- expInt' tm
                                                            return $ Fix i fname fty aname aty tm'
 
 
-expInt :: [Decl Term Ty] -> State Int [Decl Term Ty]
+expInt :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
 expInt [] = return []
 expInt (d:ds) = do list <- expInt ds
                    expBody <- expInt' (declBody d)
                    return $ (Decl (declPos d) (declName d) (declType d) (expBody)) : list
-
-expansionI :: [Decl Term Ty] -> [Decl Term Ty]
-expansionI ds = fst (runState (expInt ds) 0) 
 
 
 ---------------------------------------------------------------------
@@ -227,19 +261,25 @@ maxIterations :: Int
 maxIterations = 20
 
 
-optRound :: [Decl Term Ty] -> [Decl Term Ty]
-optRound ds = constFolding $ expansionI $ expansionD $ deadCode ds
+optRound :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+optRound ds = do dc   <- deadCode ds
+                 expd <- expDecls dc
+                 expi <- expInt expd
+                 constFolding expi
 
 
-optimize' :: Int -> [Decl Term Ty] -> [Decl Term Ty]
-optimize' n ds | n == maxIterations = ds
-               | otherwise          = let res = optRound ds in 
-                                        if res == ds then ds else optimize' (n+1) res
+optimize' :: Int -> [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
+optimize' n ds | n == maxIterations = return ds
+               | otherwise          = do res   <- optRound ds  
+                                         (b,_) <- get
+                                         if b then do modify (\(_,n) -> (False,n))
+                                                      optimize' (n+1) res
+                                              else return ds
                                         -- == MUY COSTOSO? VALE LA PENA UNA MONADA DONDE TENGA INFO DE SI SE MODIFICO ALGO?
 
 
 optimize :: [Decl Term Ty] -> [Decl Term Ty]
-optimize ds = optimize' 0 ds
+optimize ds = fst $ runState (optimize' 0 ds) (False, 0)
 
 
 -- Muy costoso ==.
