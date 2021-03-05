@@ -17,12 +17,9 @@ import Subst
 import MonadPCF
 import Common
 
-{-
-convertType :: STy -> NTy
-convertType (DTy name) = Ntype "" NatTy
-convertType SNatTy = Ntype "" NatTy
-convertType  = do
--}
+---------------------------------------------------------------------
+------------------------ FUNCIONES GENERALES ------------------------
+---------------------------------------------------------------------
 
 -- Reemplaza los sinonimos de tipos en un termino por lo que representa. 
 rmvSynTerm :: MonadPCF m => SNTerm -> m (NTerm)
@@ -34,8 +31,6 @@ rmvSynTerm (Lam i name ty t)         = do nty  <- styToTy ty
 rmvSynTerm (App i t1 t2)             = do t1Ty <- rmvSynTerm t1
                                           t2Ty <- rmvSynTerm t2
                                           return (App i t1Ty t2Ty)
---rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
---                                 return (UnaryOp i op tTy)
 rmvSynTerm (BinaryOp i op t1 t2)     = do t1Ty <- rmvSynTerm t1
                                           t2Ty <- rmvSynTerm t2
                                           return (BinaryOp i op t1Ty t2Ty)                                   
@@ -52,15 +47,9 @@ rmvSynTerm (LetIn i n ty t t')       = do nty  <- styToTy ty
                                           tTy' <- rmvSynTerm t'
                                           return (LetIn i n nty tTy tTy')
 
-{-}
--- Transforma una lista de binders con tipos con sinonimos en una con
--- tipos sin sinonimos.
-rmvSynBinds :: MonadPCF m => [(MultiBind,STy)] -> m ([(MultiBind,Ty)])
-rmvSynBinds [] = return [] 
-rmvSynBinds ((ns,sty):bs) = do ty <- styToTy sty
-                               bsTy <- rmvSynBinds bs  
-                               return ((ns,ty):bsTy)
--}
+-- eliminado del lenguaje interno
+--rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
+--                                 return (UnaryOp i op tTy)
 
 -- Convierte un tipo con sinonimos en uno sin sinonimos.
 styToTy :: MonadPCF m => STy -> m (Ty)
@@ -73,11 +62,17 @@ styToTy (SFunTy sty1 sty2) = do ty1 <- (styToTy sty1)
                                 ty2 <- (styToTy sty2)
                                 return (FunTy ty1 ty2)
 
-
+-- Toma una lista de tuplas multibinding (lista de nombres asociada a un tipo)
+-- y la convierte en una lista de tuplas unarybinding (un nombre asociado a un tipo)
 binderExp :: [([Name], a)] -> [(Name, a)]
 binderExp []             = []
 binderExp (([x], t):bs)  = (x, t): (binderExp bs)
 binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
+
+
+---------------------------------------------------------------------
+-------------------- FUNCIONES PARA DECLARACIONES -------------------
+---------------------------------------------------------------------
 
 expBindersD :: SDecl SMNTerm MultiBind STy -> SDecl SMNTerm UnaryBind STy
 expBindersD (DTer i name bs ty b term) = DTer i name (binderExp bs) ty b term
@@ -90,24 +85,19 @@ desugarD :: SDecl SMNTerm UnaryBind STy -> Either (SDecl SMNTerm UnaryBind STy) 
 desugarD (DTer i name [] ty False term)      = Right (Decl i name ty term)
 desugarD (DTer i name (b:bs) ty False term)  = let ts = getFunType (b:bs) ty
                                                 in Right (Decl i name ts (SLam i (unaryToMulti(b:bs)) term))
-  
 desugarD (DTer i name [(v, t)] ty True term) = Right (Decl i name (SFunTy t ty) (SFix i name (SFunTy t ty) v t term))
 desugarD (DTer i name (b:bs) ty True term)   = let ts = getFunType bs ty
                                                    new = (DTer i name [b] ts True (SLam i (unaryToMulti bs) term)) 
                                                 in  desugarD new
-
-desugarD d@(DType i name ty) = Left d
+desugarD d@(DType i name ty)                 = Left d
 
 
 elabD :: SDecl SMNTerm MultiBind STy -> Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)
 elabD = desugarD . expBindersD 
 
-{-
-- parser :  [SDecl SMNTerm MultiBind STy]
-- expBinders : [SDecl SMNTerm UnaryBind STy]
-- desugarD : [Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)]
--}
-
+---------------------------------------------------------------------
+---------------------- FUNCIONES PARA TÉRMINOS ----------------------
+---------------------------------------------------------------------
 
 expBinders :: SMNTerm -> SUNTerm
 expBinders (SV info var)                    = SV info var
@@ -122,11 +112,6 @@ expBinders (SIfZ info c t1 t2)              = SIfZ info (expBinders c) (expBinde
 expBinders (SLetIn info name binds ty t t') = SLetIn info name (binderExp binds) ty (expBinders t) (expBinders t')
 expBinders (SRec info name binds ty t t')   = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
 
-{-
-getFunType :: [(Name, Ty)] -> Ty
-getFunType [(n, t)] = t
-getFunType ((n, t):bs) = FunTy t (getFunType bs)
--}
 
 getFunType :: [(Name, STy)] -> STy -> STy
 getFunType [(n, t)] ty    = SFunTy t ty
@@ -159,7 +144,6 @@ desugar (SRec info name binds ty t t')     = let funTy   = (getFunType (tail bin
                                               in desugar newTerm
                                             
 
-
 -- | 'elabLN' transforma variables ligadas en índices de de Bruijn
 -- en un término dado. 
 elabLN :: NTerm -> Term
@@ -169,10 +153,11 @@ elabLN (Lam p v ty t)        = Lam p v ty (close v (elabLN t))
 elabLN (App p h a)           = App p (elabLN h) (elabLN a)
 elabLN (Fix p f fty x xty t) = Fix p f fty x xty (closeN [f, x] (elabLN t))
 elabLN (IfZ p c t e)         = IfZ p (elabLN c) (elabLN t) (elabLN e)
---elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
 elabLN (BinaryOp i o t1 t2)  = BinaryOp i o (elabLN t1)(elabLN t2)
 elabLN (LetIn p n ty t t')   = LetIn p n ty (elabLN t) (close n (elabLN t'))
 
+-- eliminado del lenguaje interno
+--elabLN (UnaryOp i o t)       = UnaryOp i o (elabLN t)
 
 elab :: MonadPCF m => SMNTerm -> m Term
 elab t = let t1 = expBinders t      -- SUNTerm

@@ -21,39 +21,39 @@ import Data.List ( elemIndex )
 varChanger :: (Int -> Pos -> Name -> Term) --que hacemos con las variables localmente libres
            -> (Int -> Pos -> Int ->  Term) --que hacemos con los indices de De Bruijn
            -> Term -> Term
-varChanger local bound t = go 0 t where
-  go n   (V p (Bound i)) = bound n p i
-  go n   (V p (Free x)) = local n p x 
-  go n (Lam p y ty t)   = Lam p y ty (go (n+1) t)
-  go n (App p l r)   = App p (go n l) (go n r)
+varChanger local bound t     = go 0 t where
+  go n   (V p (Bound i))     = bound n p i
+  go n   (V p (Free x))      = local n p x 
+  go n (Lam p y ty t)        = Lam p y ty (go (n+1) t)
+  go n (App p l r)           = App p (go n l) (go n r)
   go n (Fix p f fty x xty t) = Fix p f fty x xty (go (n+2) t)
-  go n (IfZ p c t e) = IfZ p (go n c) (go n t) (go n e)
-  go n t@(Const _ _) = t
-  --go n (UnaryOp p op t) = UnaryOp p op (go n t)
+  go n (IfZ p c t e)         = IfZ p (go n c) (go n t) (go n e)
+  go n t@(Const _ _)         = t
   go n (BinaryOp p op t1 t2) = BinaryOp p op (go n t1) (go n t2)
-  go n (LetIn p v ty t1 t2) = LetIn p v ty (go n t1) (go (n+1) t2)
+  go n (LetIn p v ty t1 t2)  = LetIn p v ty (go n t1) (go (n+1) t2)
+
+  -- eliminado del lenguaje interno
+  --go n (UnaryOp p op t) = UnaryOp p op (go n t)
 
 -- `openN [nn,..,n0] t` reemplaza las primeras (n+1) variables ligadas
 -- en `t` (que debe ser localmente cerrado) por los nombres libres en la
 -- lista. La variable Bound 0 pasa a ser Free n0, y etc. Estos nombres
 -- deben ser frescos en el término para que no ocurra shadowing.
 openN :: [Name] -> Term -> Term
-openN ns = varChanger (\_ p n -> V p (Free n)) bnd where
-   bnd depth p i | i <  depth = V p (Bound i)
-                 | i >= depth && i < depth + nns =
-                    V p (Free (nsr !! (i - depth)))
-                 | otherwise  = abort "openN: M is not LC"
-   nns = length ns
-   nsr = reverse ns
+openN ns = varChanger (\_ p n -> V p (Free n)) bnd 
+   where bnd depth p i | i <  depth = V p (Bound i)
+                       | i >= depth && i < depth + nns = V p (Free (nsr !! (i - depth)))
+                       | otherwise  = abort "openN: M is not LC"
+         nns = length ns
+         nsr = reverse ns
 
 -- `closeN [nn,..,n0] t` es la operación inversa a open. Reemplaza
 -- las variables `Free ni` por la variable ligada `Bound i`.
 closeN :: [Name] -> Term -> Term
 closeN ns = varChanger lcl (\_ p i -> V p (Bound i))
-   where lcl depth p y =
-            case elemIndex y nsr of
-              Just i -> V p (Bound (i + depth))
-              Nothing -> V p (Free y)
+   where lcl depth p y = case elemIndex y nsr of
+                           Just i -> V p (Bound (i + depth))
+                           Nothing -> V p (Free y)
          nsr = reverse ns
 
 -- `substN [tn,..,t0] t` sustituye los índices de de Bruijn en t con
@@ -73,8 +73,7 @@ substN :: [Term] -> Term -> Term
 substN ns t = varChanger (\_ p n -> V p (Free n)) bnd t 
    where bnd depth p i 
              | i <  depth = V p (Bound i)
-             | i >= depth && i < depth + nns
-                = nsr !! (i - depth)
+             | i >= depth && i < depth + nns = nsr !! (i - depth)
              | otherwise = abort $ "substN: M is not LC" ++ show(ns) ++ show(t) ++ show(i) ++ show(depth)
          nns = length ns
          nsr = reverse ns

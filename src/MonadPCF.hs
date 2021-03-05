@@ -80,9 +80,8 @@ addSynTy n ty = modify (\s -> s { synTy = (n,ty) : synTy s })
 -- el tipo si es que lo es.
 
 lookupSynTy :: MonadPCF m => Name -> m (Maybe Ty)
-lookupSynTy nm = do
-      s <- get
-      return $ lookup nm (synTy s)
+lookupSynTy nm = do s <- get
+                    return $ lookup nm (synTy s)
 
 ----------------------------------------------------------
 -- Fin parte agregada para sinonimos de tipos.
@@ -93,16 +92,14 @@ hasName :: Name -> Decl a b -> Bool
 hasName nm (Decl { declName = nm' }) = nm == nm'
 
 lookupDecl :: MonadPCF m => Name -> m (Maybe Term)
-lookupDecl nm = do
-     s <- get
-     case filter (hasName nm) (glb s) of
-       (Decl { declBody=e }):_ -> return (Just e)
-       [] -> return Nothing
+lookupDecl nm = do s <- get
+                   case filter (hasName nm) (glb s) of
+                     (Decl { declBody=e }):_ -> return (Just e)
+                     [] -> return Nothing
 
 lookupTy :: MonadPCF m => Name -> m (Maybe Ty)
-lookupTy nm = do
-      s <- get
-      return $ lookup nm (tyEnv s)
+lookupTy nm = do s <- get
+                 return $ lookup nm (tyEnv s)
 
 failPosPCF :: MonadPCF m => Pos -> String -> m a
 failPosPCF p s = throwError (ErrPos p s)

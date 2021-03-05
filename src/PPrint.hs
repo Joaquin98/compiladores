@@ -24,14 +24,12 @@ import Text.PrettyPrint
 -- esto es rídiculamente ineficiente si los términos empiezan a ser
 -- grandes, porque requiere atravesarlo íntegramente.
 openRename :: [Name] -> Term -> ([Name], Term)
-openRename ns t =
-  let fs = freeVars t in
-  let freshen n = let cands = n : (map (\i -> n ++ show i) [0..]) in
-                  let n' = head (filter (\n -> not (elem n fs)) cands) in
-                  n'
-  in
-  let fresh_ns = map freshen ns in
-  (fresh_ns, openN fresh_ns t)
+openRename ns t = let fs = freeVars t in
+                  let freshen n = let cands = n : (map (\i -> n ++ show i) [0..]) in
+                                  let n' = head (filter (\n -> not (elem n fs)) cands) in
+                                  n' in
+                  let fresh_ns = map freshen ns in
+                  (fresh_ns, openN fresh_ns t)
 
 -- | 'openAll' convierte términos locally nameless
 -- a términos fully named abriendo todos las variables de ligadura que va encontrando
@@ -48,10 +46,11 @@ openAll (App p t u)           = App p (openAll t) (openAll u)
 openAll (Fix p f fty x xty t) = let ([f', x'], t') = openRename [f, x] t 
                                 in Fix p f' fty x' xty (openAll t')
 openAll (IfZ p c t e)         = IfZ p (openAll c) (openAll t) (openAll e)
---openAll (UnaryOp i o t)       = UnaryOp i o (openAll t)
+
 openAll (BinaryOp i o t1 t2)  = BinaryOp i o (openAll t1) (openAll t2)
 openAll (LetIn i n ty t t')   = let ([n'], tr) = openRename [n] t' 
                                 in LetIn i n' ty (openAll t) (openAll tr)
+--openAll (UnaryOp i o t)     = UnaryOp i o (openAll t) (eliminado del lenguaje interno)
 
 
 -- | Pretty printer de nombres (Doc)
@@ -85,9 +84,9 @@ binary2doc Add  = text "+"
 binary2doc Diff = text "-"
 
 collectApp :: NTerm -> (NTerm, [NTerm])
-collectApp t = go [] t where
-  go ts (App _ h t) = go (t:ts) h
-  go ts h = (h, ts)
+collectApp t = go [] t 
+  where go ts (App _ h t) = go (t:ts) h
+        go ts h = (h, ts)
 
 parenIf :: Bool -> Doc -> Doc
 parenIf True = parens
@@ -104,7 +103,7 @@ t2doc :: Bool     -- Debe ser un átomo?
 t2doc at (V _ x)               = text x
 t2doc at (Const _ c)           = c2doc c
 t2doc at (Lam _ v ty t)        = parenIf at $
-                                sep [ sep [ text "fun", 
+                                 sep [ sep [ text "fun", 
                                             parens (sep [name2doc v,text ":",ty2doc ty]), 
                                             text "->"], 
                                       nest 2 (t2doc False t)]
@@ -119,16 +118,17 @@ t2doc at (IfZ _ c t e)         = parenIf at $
                                  sep [ text "ifz", nest 2 (t2doc False c)
                                      , text "then", nest 2 (t2doc False t)
                                      , text "else", nest 2 (t2doc False e) ]                           
-{-
-t2doc at (UnaryOp _ o t)       = parenIf at $
-                                 unary2doc o <+> t2doc True t
--}
 t2doc at (BinaryOp _ o t1 t2)  = parenIf at $
                                  t2doc True t1 <+> binary2doc o <+> t2doc True t2
 t2doc at (LetIn i n ty t t')   = parenIf at $
                                  sep [ text "let", binding2doc (n, ty),
                                        text "=", nest 2 (t2doc False t),
                                        text "in", nest 2 (t2doc False t') ]
+
+{- eliminado del lenguaje interno
+t2doc at (UnaryOp _ o t)       = parenIf at $
+                                 unary2doc o <+> t2doc True t
+-}                                       
 
 binding2doc :: (Name, Ty) -> Doc
 binding2doc (x, ty) = parens (sep [name2doc x, text ":", ty2doc ty])

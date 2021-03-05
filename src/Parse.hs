@@ -72,12 +72,11 @@ tyatom = (reserved "Nat" >> return SNatTy)
          <|> parens typeP
 
 typeP :: P STy
-typeP = try (do 
-          x <- tyatom
-          reservedOp "->"
-          y <- typeP
-          return (SFunTy x y))
-      <|> tyatom
+typeP = try (do x <- tyatom
+                reservedOp "->"
+                y <- typeP
+                return (SFunTy x y))
+            <|> tyatom
           
 
 
@@ -86,46 +85,34 @@ const :: P Const
 const = CNat <$> num
 
 unaryOpApp :: P SMNTerm
-unaryOpApp = do
-  i <- getPos
-  foldr (\(w, r) rest -> try (do 
-                                 reserved w
-                                 a <- atom
-                                 return (r a))
-                                 <|> rest) parserZero (mapping i)
+unaryOpApp = do i <- getPos
+                foldr (\(w, r) rest -> try (do reserved w
+                                               a <- atom
+                                               return (r a))
+                                               <|> rest) parserZero (mapping i)
   where
-   mapping i = [
-       ("succ", SUnaryOpApp i Succ)
-     , ("pred", SUnaryOpApp i Pred)
-    ]
+   mapping i = [("succ", SUnaryOpApp i Succ)
+              , ("pred", SUnaryOpApp i Pred)]
 
 binaryOp :: P SMNTerm
-binaryOp = do
-  i <- getPos
-  foldr (\(w, r) rest -> try (do 
-                                 t1 <- atom
-                                 reservedOp w
-                                 t2 <- atom
-                                 return (r t1 t2))
-                                 <|> rest) parserZero (mapping i)
+binaryOp = do i <- getPos
+              foldr (\(w, r) rest -> try (do t1 <- atom
+                                             reservedOp w
+                                             t2 <- atom
+                                             return (r t1 t2))
+                                             <|> rest) parserZero (mapping i)
   where
-   mapping i = [
-       ("+", SBinaryOp i Add)
-     , ("-", SBinaryOp i Diff)
-    ]
+   mapping i = [("+", SBinaryOp i Add)
+              , ("-", SBinaryOp i Diff)]
     
 unaryOpNApp :: P SMNTerm
-unaryOpNApp = do
-  i <- getPos
-  foldr (\(w, r) rest -> try (do 
-                                 reserved w
-                                 return r)
-                                 <|> rest) parserZero (mapping i)
+unaryOpNApp = do i <- getPos
+                 foldr (\(w, r) rest -> try (do reserved w
+                                                return r)
+                                                <|> rest) parserZero (mapping i)
   where
-   mapping i = [
-       ("succ", SUnaryOp i Succ)
-     , ("pred", SUnaryOp i Pred)
-    ]
+   mapping i = [("succ", SUnaryOp i Succ)
+               , ("pred", SUnaryOp i Pred)]
     
 unaryOp :: P SMNTerm
 unaryOp = unaryOpApp <|> unaryOpNApp 
@@ -145,10 +132,10 @@ lam = do i <- getPos
 
 -- Nota el parser app también parsea un solo atom.
 app :: P SMNTerm
-app = (do i <- getPos
-          f <- atom
-          args <- many atom
-          return (foldl (SApp i) f args))
+app = do i <- getPos
+         f <- atom
+         args <- many atom
+         return (foldl (SApp i) f args)
 
 ifz :: P SMNTerm
 ifz = do i <- getPos
@@ -213,29 +200,16 @@ letIn = do i <- getPos
            if not b then return (SLetIn i v bs ty t t')
                 else if bs == [] then parserZero
                 else return (SRec i v bs ty t t')
-{-
-letRec :: SMNTerm
-letRec = do i <- getPos
-           reserved "let"
-           reserved "rec"
-           (v, bs, ty) <- fun
-           reservedOp "="
-           t <- tm
-           reserved "in"
-           t' <- tm
-           if bs /= [] then return (SRec i v bs ty t t')
-                       else parserZero
--}
+
 -- | Parser de términos
 tm :: P SMNTerm
 tm = binaryOp <|> app <|> lam <|> ifz <|> unaryOp <|> fix <|> letIn 
 
 -- | Parser de declaraciones
 declLet :: P (SDecl SMNTerm MultiBind STy)
-declLet = do 
-     i <- getPos
-     ((v, bs, ty), b, t) <- letP
-     return (DTer i v bs ty b t)
+declLet = do i <- getPos
+             ((v, bs, ty), b, t) <- letP
+             return (DTer i v bs ty b t)
 
 declT :: P (SDecl SMNTerm MultiBind STy)
 declT = do i <- getPos
@@ -269,6 +243,3 @@ parse :: String -> SMNTerm
 parse s = case runP tm s "" of
             Right t -> t
             Left e -> error ("no parse: " ++ show s)
-
---  parse  "let rec f (x z y : Nat) : Nat = x in f 4 " 
---  runP declOrTm  "let rec f (x z y : Nat) : Nat = x in f 4 " ""

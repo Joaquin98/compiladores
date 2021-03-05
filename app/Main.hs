@@ -108,7 +108,7 @@ main = execParser opts >>= go
 
 
 programToString :: [Decl Term Ty] -> String
-programToString [] = ""
+programToString []     = ""
 programToString (d:ds) = (declName d) ++ ": " ++ termToString (declBody d) ++ "\n" ++ (programToString ds) 
 
 termToString :: Term -> String 
@@ -151,8 +151,6 @@ processedProgram (arg:args) = do compileFile' arg
                                  return $  (reverse (glb s)) ++ ((optimize . reverse) (glb s)) 
 
 
-
-
 compileFile' ::  MonadPCF m => String -> m ()
 compileFile' f = do
     printPCF ("Abriendo "++f++"...")
@@ -172,11 +170,10 @@ handleDecl' decl = do let ed = elabD decl
 
 -- Maneja la ejecucion de las declaraciones de terminos.
 handleTermDecl' ::  MonadPCF m => Decl SMNTerm STy -> m ()
-handleTermDecl' (Decl p name sty termSty) = do
-        ty <- styToTy sty
-        tt <- elab termSty
-        tcDecl (Decl p name ty tt)  
-        addDecl (Decl p name ty tt) 
+handleTermDecl' (Decl p name sty termSty) = do ty <- styToTy sty
+                                               tt <- elab termSty
+                                               tcDecl (Decl p name ty tt)  
+                                               addDecl (Decl p name ty tt) 
 
 
 prompt :: String
@@ -284,13 +281,12 @@ interpretCommand x
 
 commands :: [InteractiveCommand]
 commands
-  =  [ Cmd [":browse"]      ""        (const Browse) "Ver los nombres en scope",
-       Cmd [":load"]        "<file>"  (Compile . CompileFile)
-                                                     "Cargar un programa desde un archivo",
-       Cmd [":print"]       "<exp>"   Main.Print          "Imprime un término y sus ASTs sin evaluarlo",
-       Cmd [":type"]        "<exp>"   Type           "Chequea el tipo de una expresión",
-       Cmd [":quit",":Q"]        ""        (const Quit)   "Salir del intérprete",
-       Cmd [":help",":?"]   ""        (const Help)   "Mostrar esta lista de comandos" ]
+  =  [ Cmd [":browse"]      ""        (const Browse)          "Ver los nombres en scope",
+       Cmd [":load"]        "<file>"  (Compile . CompileFile) "Cargar un programa desde un archivo",
+       Cmd [":print"]       "<exp>"   Main.Print              "Imprime un término y sus ASTs sin evaluarlo",
+       Cmd [":type"]        "<exp>"   Type                    "Chequea el tipo de una expresión",
+       Cmd [":quit",":Q"]   ""        (const Quit)            "Salir del intérprete",
+       Cmd [":help",":?"]   ""        (const Help)            "Mostrar esta lista de comandos" ]
 
 helpTxt :: [InteractiveCommand] -> String
 helpTxt cs
@@ -308,53 +304,46 @@ handleCommand ::  MonadPCF m => Command  -> m Bool
 handleCommand cmd = do
    s@GlEnv {..} <- get
    case cmd of
-       Quit   ->  return False
-       Noop   ->  return True
-       Help   ->  printPCF (helpTxt commands) >> return True
-       Browse ->  do  printPCF (unlines [ name | name <- reverse (nub (map declName glb)) ])
-                      return True
-       Compile c ->
-                  do  case c of
-                          CompileInteractive e -> compilePhrase e
-                          CompileFile f        -> put (s {lfile=f}) >> compileFile f
-                      return True
-       Main.Print e   -> printPhrase e >> return True
-       Type e    -> typeCheckPhrase e >> return True
+       Quit         -> return False
+       Noop         -> return True
+       Help         -> printPCF (helpTxt commands) >> return True
+       Browse       -> do printPCF (unlines [ name | name <- reverse (nub (map declName glb)) ])
+                          return True
+       Compile c    -> do case c of
+                            CompileInteractive e -> compilePhrase e
+                            CompileFile f        -> put (s {lfile=f}) >> compileFile f
+                          return True
+       Main.Print e -> printPhrase e >> return True
+       Type e       -> typeCheckPhrase e >> return True
 
 compilePhrase ::  MonadPCF m => String -> m ()
-compilePhrase x =
-  do
-    dot <- parseIO "<interactive>" declOrTm x
-    case dot of 
-      Left d  -> handleDecl d
-      Right t -> handleTerm t
+compilePhrase x = do dot <- parseIO "<interactive>" declOrTm x
+                     case dot of 
+                       Left d  -> handleDecl d
+                       Right t -> handleTerm t
 
 handleTerm ::  MonadPCF m => SMNTerm -> m ()
-handleTerm t = do
-         tt <- elab t
-         s <- get
-         ty <- tc tt (tyEnv s)
-         te <- eval tt
-         printPCF (pp te ++ " : " ++ ppTy ty)
+handleTerm t = do tt <- elab t
+                  s  <- get
+                  ty <- tc tt (tyEnv s)
+                  te <- eval tt
+                  printPCF (pp te ++ " : " ++ ppTy ty)
 
 printPhrase   :: MonadPCF m => String -> m ()
-printPhrase x =
-  do
-    xSTy <- parseIO "<interactive>" tm x
-    ex <- elab xSTy
-    t  <- case xSTy of 
-            (SV p f) -> maybe ex id <$> lookupDecl f
-            _       -> return ex  
-    printPCF "NTerm:"
-    printPCF (show xSTy)
-    printPCF "\nTerm:"
-    printPCF (show t)
+printPhrase x = do xSTy <- parseIO "<interactive>" tm x
+                   ex   <- elab xSTy
+                   t    <- case xSTy of 
+                           (SV p f) -> maybe ex id <$> lookupDecl f
+                           _        -> return ex  
+                   printPCF "NTerm:"
+                   printPCF (show xSTy)
+                   printPCF "\nTerm:"
+                   printPCF (show t)
 
 typeCheckPhrase :: MonadPCF m => String -> m ()
-typeCheckPhrase x = do
-         tSTy <- parseIO "<interactive>" tm x
-         tt <- elab tSTy
-         s <- get
-         ty <- tc tt (tyEnv s)
-         printPCF (ppTy ty)
+typeCheckPhrase x = do tSTy <- parseIO "<interactive>" tm x
+                       tt   <- elab tSTy
+                       s    <- get
+                       ty   <- tc tt (tyEnv s)
+                       printPCF (ppTy ty)
 

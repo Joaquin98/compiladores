@@ -19,24 +19,46 @@ import PPrint ( ppName )
 
 -- | Evaluador de términos CBV
 eval ::  MonadPCF m => Term -> m Term
-eval (V _ (Free nm)) = do
-  -- unfold and keep going
-   mtm <- lookupDecl nm 
-   case mtm of 
-     Nothing -> failPCF $ "Error de ejecución: variable no declarada: " ++ ppName nm 
-     Just t -> eval t
+eval (V _ (Free nm))        = do mtm <- lookupDecl nm 
+                                 case mtm of 
+                                   Nothing -> 
+                                      failPCF $ "Error de ejecución: variable no declarada: " ++ ppName nm 
+                                   Just t -> eval t
 
-eval (App p l r) = do
-      le <- eval l
-      re <- eval r
-      case (le, re) of
-         (Lam _ y _ m, n) ->
-            eval (subst n m)
-         (ff@(Fix _ f _ _ _ t), n) ->
-            eval (substN [ff, n] t)
-         _ ->
-            abort("Error de tipo en runtime " ++ show (le, re))
-{-}
+eval (App p l r)            = do le <- eval l
+                                 re <- eval r
+                                 case (le, re) of
+                                   (Lam _ y _ m, n) -> eval (subst n m)
+                                   (ff@(Fix _ f _ _ _ t), n) -> eval (substN [ff, n] t)
+                                   _ -> abort("Error de tipo en runtime " ++ show (le, re))
+
+eval (BinaryOp p Add t1 t2)  = do c1 <- eval t1
+                                  c2 <- eval t2
+                                  case (c1,c2) of
+                                     ((Const _ (CNat n1)),(Const _ (CNat n2))) 
+                                        -> return (Const p (CNat (n1 + n2)))
+                                     _  -> abort ("Error de tipo en runtime!")
+
+eval (BinaryOp p Diff t1 t2) = do c1 <- eval t1
+                                  c2 <- eval t2
+                                  case (c1,c2) of 
+                                    ((Const _ (CNat n1)), (Const _ (CNat n2))) 
+                                       -> return (Const p (CNat (max (n1 - n2) 0)))
+                                    _  -> abort ("Error de tipo en runtime!")
+
+eval (IfZ p c t e)           = do ce <- eval c
+                                  case ce of
+                                    Const _ (CNat 0) -> eval t
+                                    Const _ (CNat _) -> eval e
+                                    c' -> abort ("Error de tipo en runtime!")
+
+eval (LetIn i n ty t t')     = do evt <- eval t
+                                  eval (subst evt t')
+
+eval t                       = return t
+
+
+{-- eliminado del lenguaje interno}
 eval (UnaryOp p Succ t) = do
         te <- eval t
         case te of
@@ -48,28 +70,3 @@ eval (UnaryOp p Pred t) = do
           Const _ (CNat n) -> return (Const p (CNat (max 0 (n-1))))
           _                -> abort ("Error de tipo en runtime!")
          -}
-eval (BinaryOp p Add t1 t2) = do 
-      c1 <- eval t1
-      c2 <- eval t2
-      case (c1,c2) of
-         ((Const _ (CNat n1)),(Const _ (CNat n2))) -> return (Const p (CNat (n1 + n2)))
-         _                                         -> abort ("Error de tipo en runtime!")
-eval (BinaryOp p Diff t1 t2) = do 
-      c1 <- eval t1
-      c2 <- eval t2
-      case (c1,c2) of 
-         ((Const _ (CNat n1)), (Const _ (CNat n2))) -> return (Const p (CNat (max (n1 - n2) 0)))
-         _                                          -> abort ("Error de tipo en runtime!")
-eval (IfZ p c t e) = do
-      ce <- eval c
-      case ce of
-        Const _ (CNat 0) -> eval t
-        Const _ (CNat _) -> eval e
-        c' -> abort ("Error de tipo en runtime!")
-eval (LetIn i n ty t t') = do evt <- eval t
-                              eval (subst evt t')
-
-
-
--- nada más para reducir
-eval t = return t

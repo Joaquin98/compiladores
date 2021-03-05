@@ -10,6 +10,7 @@ Stability   : experimental
 Este módulo permite compilar módulos a la BVM. También provee una implementación de la BVM 
 para ejecutar bytecode.
 -}
+
 module Bytecompile
   (Bytecode, runBC, bcWrite, bcRead, bytecompileModule) 
  where
@@ -20,9 +21,9 @@ import MonadPCF
 import Common
 
 import qualified Data.ByteString.Lazy as BS hiding (putStrLn)
-import Data.Binary ( Word32, Binary(put, get), decode, encode )
-import Data.Binary.Put ( putWord32le )
-import Data.Binary.Get ( getWord32le, isEmpty )
+import Data.Binary (Word32, Binary(put, get), decode, encode)
+import Data.Binary.Put (putWord32le)
+import Data.Binary.Get (getWord32le, isEmpty)
 
 type Opcode = Int
 type Bytecode = [Int]
@@ -60,9 +61,9 @@ pattern CONST    = 2
 pattern ACCESS   = 3
 pattern FUNCTION = 4
 pattern CALL     = 5
---pattern SUCC     = 6
+--pattern SUCC     = 6 (lo eliminamos del lenguaje interno)
 pattern ADD      = 6
---pattern PRED     = 7
+--pattern PRED     = 7 (lo eliminamos del lenguaje interno)
 pattern DIFF     = 7
 pattern IFZ      = 8
 pattern FIX      = 9
@@ -75,21 +76,6 @@ pattern TAILCALL = 15
 
 type Env = [Val]
 data Val = I Int | Fun Env Bytecode | RA Env Bytecode deriving (Show)
-
--- C(ifz c t1 t2) = C(t2); C(t1); C(c); IFZ;
--- <IFZ:k | e | c:t1:t2:s> -> <k|e|t1:s>
-
-{-
-data Tm info var ty = 
-    V info var
-  | Const info Const
-  | Lam info Name ty (Tm info var ty)
-  | App info (Tm info var ty) (Tm info var ty)
-  | UnaryOp info UnaryOp (Tm info var ty)
-  | Fix info Name ty Name ty (Tm info var ty)
-  | IfZ info (Tm info var ty) (Tm info var ty) (Tm info var ty)
-  deriving (Show, Functor)
--}
 
 
 bc :: MonadPCF m => Term -> m Bytecode
@@ -111,45 +97,47 @@ tcompile t                   = do tc <- bc' t
                                   return(tc ++ [RETURN])         
 
 bc' :: MonadPCF m => Term -> m Bytecode
-bc' (V _ (Bound i))     = return [ACCESS,i] 
-bc' (Const _ (CNat n))  = return [CONST,n]
-bc' (Lam _ _ _ t)       = do tc <- tcompile t
-                             return ([FUNCTION, (length tc)] ++ tc)  
-bc' (App _ f e)         = do fc <- bc' f
-                             ec <- bc' e
-                             return (fc ++ ec ++ [CALL]) 
+bc' (V _ (Bound i))         = return [ACCESS,i] 
+bc' (Const _ (CNat n))      = return [CONST,n]
+bc' (Lam _ _ _ t)           = do tc <- tcompile t
+                                 return ([FUNCTION, (length tc)] ++ tc)  
+bc' (App _ f e)             = do fc <- bc' f
+                                 ec <- bc' e
+                                 return (fc ++ ec ++ [CALL]) 
+bc' (BinaryOp _ Add t1 t2)  = do t1' <- bc' t1
+                                 t2' <- bc' t2
+                                 return (t1'++t2'++[ADD])
+bc' (BinaryOp _ Diff t1 t2) = do t1' <- bc' t1
+                                 t2' <- bc' t2
+                                 return (t1'++t2'++[DIFF])
+bc' (Fix _ _ _ _ _ t)       = do tc <- bc' t
+                                 return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN,FIX])  
+bc' (IfZ _ c t1 t2)         = do t2c <- bc' t2
+                                 t1c <- bc' t1
+                                 cc  <- bc' c
+                                 return (cc ++ [IFZ, (length t1c)+2] ++ t1c ++ [JUMP, (length t2c)] ++ t2c)
+bc' (LetIn _ _ _ t1 t2)     = do t1c <- bc' t1
+                                 t2c <- bc' t2
+                                 return (t1c ++ [SHIFT] ++ t2c ++ [DROP])
+bc' x                       = do printPCF $ show x
+                                 return ([10])
+
+-- eliminados del lenguaje interno
 --bc' (UnaryOp _ Succ t)  = do t' <- bc' t
 --                             return (t' ++ [SUCC])
 --bc' (UnaryOp _ Pred t)  = do t' <- bc' t
 --                             return (t' ++ [PRED])
-bc' (BinaryOp _ Add t1 t2) = do t1' <- bc' t1
-                                t2' <- bc' t2
-                                return (t1'++t2'++[ADD])
-bc' (BinaryOp _ Diff t1 t2) = do t1' <- bc' t1
-                                 t2' <- bc' t2
-                                 return (t1'++t2'++[DIFF])
-bc' (Fix _ _ _ _ _ t)   = do tc <- bc' t
-                             return ([FUNCTION, (length tc) + 1] ++ tc ++ [RETURN,FIX])  
-bc' (IfZ _ c t1 t2)     = do t2c <- bc' t2
-                             t1c <- bc' t1
-                             cc  <- bc' c
-                             return (cc ++ [IFZ, (length t1c)+2] ++ t1c ++ [JUMP, (length t2c)] ++ t2c)
-bc' (LetIn _ _ _ t1 t2) = do t1c <- bc' t1
-                             t2c <- bc' t2
-                             return (t1c ++ [SHIFT] ++ t2c ++ [DROP])
-bc' x                   = do printPCF $ show x
-                             return ([10])
 
---c IFZ (lt1) t1 JUMP (lt2) t2
+
 
 convertModule :: [Decl Term Ty] -> Term
-convertModule [d] = declBody d
+convertModule [d]    = declBody d
 convertModule (d:ds) = 
    (LetIn NoPos (declName d) (declType d) (declBody d) (close (declName d) (convertModule ds)))
 
 
 bytecompileModule :: MonadPCF m => [Decl Term Ty] -> m Bytecode
-bytecompileModule [] = return ([10])
+bytecompileModule []  = return ([10])
 bytecompileModule mod = do printPCF $  show (convertModule (reverse mod))
                            bc (convertModule (reverse mod))
 
@@ -189,12 +177,3 @@ runBC' (SHIFT:c) e (v:s)                = runBC' c (v:e) s
 runBC' (DROP:c) (v:e) s                 = runBC' c e s
 runBC' c e s                            = do putStrLn (show c)
                                              return ()
-{-
-4 -> [12 ... ] [] [(Fun [] [3 0 6...])]
-12 -> [3 ...] [(Fun [] [3 0 6...])] []
-3 -> [2 ...] [(Fun [] [3 0 6...])] [(Fun [] [3 0 6...])]
-2 -> [5 ..] [(Fun [] [3 0 6...])] [1 : (Fun [] [3 0 6...])]
-5 -> [3 0 6 ... ] [1] [(RA [(Fun [] [3 0 6...])] [13 ...])]
-3 -> [6 ...] [1] [ 1 : (RA [(Fun [] [3 0 6...])] [13 ...])]
-3 -> [1 ...] [1] [ 2 : (RA [(Fun [] [3 0 6...])] [13 ...])]
--}

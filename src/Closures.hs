@@ -15,7 +15,7 @@ getName name = do n <- get
 
 -- Dado un termino, retorna las variables libres que se encuentran en él.
 freeVars' :: Term -> StateT Int (Writer [IrDecl]) [Name]
-freeVars' t =  return $ toList $ fromList $ filter (\name -> isPrefixOf "__" name) (freeVars t)
+freeVars' t = return $ toList $ fromList $ filter (\name -> isPrefixOf "__" name) (freeVars t)
 
 namesToIrTms :: [Name] -> [IrTm]
 namesToIrTms = map (\name -> IrVar name)

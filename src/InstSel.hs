@@ -182,27 +182,7 @@ cgExpr (BinOp Lang.Diff v1 v2) = do
   tell [r'' := Mul False False (LocalReference integer r)
                                (LocalReference integer r'64) []]
   return (IntToPtr (LocalReference integer r'') ptr [])
-{-
-cgExpr (BinOp Lang.Prod v1 v2) = do
-  v1 <- cgV v1
-  v2 <- cgV v2
-  vf1 <- freshName
-  vf2 <- freshName
-  r <- freshName
-  tell [vf1 := PtrToInt v1 integer []]
-  tell [vf2 := PtrToInt v2 integer []]
-  tell [r := Mul False False
-               (LocalReference integer vf1)
-               (LocalReference integer vf2)
-               []]
-  return (IntToPtr (LocalReference integer r) ptr [])
 
-cgExpr (UnOp Lang.Succ v) = do
-  cgExpr (BinOp Lang.Add v (C 1)) -- trucho
-
-cgExpr (UnOp Lang.Pred v) = do
-  cgExpr (BinOp Lang.Sub v (C 1)) -- trucho
--}
 cgExpr (UnOp Lang.Print v) = do
   v <- cgV v
   vf <- freshName
@@ -297,3 +277,13 @@ cgTerm (CondJump (Eq v1 v2) lt lf) = do
 cgTerm (Return v1) = do
   v1 <- cgV v1
   return $ Do $ Ret (Just v1) []
+
+
+{-eliminado del lenguaje interno
+
+cgExpr (UnOp Lang.Succ v) = do
+  cgExpr (BinOp Lang.Add v (C 1)) -- trucho
+
+cgExpr (UnOp Lang.Pred v) = do
+  cgExpr (BinOp Lang.Sub v (C 1)) -- trucho
+-}
