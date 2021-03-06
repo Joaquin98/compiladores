@@ -30,7 +30,8 @@ lexer = Tok.makeTokenParser $
          commentLine    = "#",
          reservedNames = ["let", "fun", "fix", "then", "else", 
                           "succ", "pred", "ifz", "Nat", "in", "rec", "type"],
-         reservedOpNames = ["->",":","=","+","-"]
+         reservedOpNames = ["->",":","=","+","-"],
+         identStart = letter -- internamente agregamos variables frescas que empiezan con _ o __
         }
 
 whiteSpace :: P ()

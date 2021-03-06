@@ -4,6 +4,13 @@ import Control.Monad.State
 import Subst
 import Common
 
+change :: Bool -> State (Bool, Int) ()
+change b = modify (\(_,n) -> (b,n))
+
+getChange :: State (Bool, Int) Bool
+getChange = do (b,n) <- get
+               return b
+
 ---------------------------------------------------------------------
 -------------------------- CONSTANT FOLDING -------------------------
 ---------------------------------------------------------------------
@@ -22,7 +29,7 @@ reduce x = x
 
 constFolding' :: Term -> State (Bool, Int) Term
 -- casos optimizacion
-constFolding' (BinaryOp i op tm1 tm2)        = do modify (\(_,n) -> (True,n))
+constFolding' (BinaryOp i op tm1 tm2)        = do change True
                                                   tm1' <- constFolding' tm1
                                                   tm2' <- constFolding' tm2
                                                   return $ reduce $ BinaryOp i op tm1' tm2'
@@ -61,7 +68,7 @@ usedDecls decls = foldr (++) [] (map (freeVars . declBody) decls)
 removeUnused :: [Decl Term Ty] -> [Name] -> State (Bool, Int) [Decl Term Ty]
 removeUnused [x] names    = return $ [x]
 removeUnused (d:ds) names = case elem (declName d) names of
-                                False -> do modify (\(_,n) -> (True,n))
+                                False -> do change True
                                             removeUnused ds names
                                 True  -> do ds' <- removeUnused ds names
                                             return $ d:ds'
@@ -72,7 +79,7 @@ deadDecls ds = removeUnused ds (usedDecls ds)
 
 deadIf' :: Term -> State (Bool, Int) Term
 -- casos optimizacion
-deadIf' (IfZ i c tm1 tm2) = do modify (\(_,n) -> (True,n))
+deadIf' (IfZ i c tm1 tm2) = do change True
                                c'   <- deadIf' c
                                tm1' <- deadIf' tm1
                                tm2' <- deadIf' tm2
@@ -143,38 +150,43 @@ shortDecl (d:ds) | size (declBody d) < maxSize = Just d
                  | otherwise                   = shortDecl ds
 
 
--- Fijarse que se use el name
-getNewVar :: String -> State (Bool, Int) String
-getNewVar name = do n <- get
-                    modify (\(b,n) -> (b,n+1))
-                    return $ "linexp" ++ name ++ show(n)
+getNewVar :: State (Bool, Int) String
+getNewVar = do (b,n) <- get
+               modify (\(b,n) -> (b,n+1))
+               return $ "_linexp" ++ show(n)
 
 
 -- EXPANSIÓN DE DECLARACIONES CORTAS:
 
--- Los let tiene nombres iguales si se hacen en distintas llamadas a expansion.
 expDecl' :: (Decl Term Ty) -> Term -> State (Bool, Int) Term
 -- casos optimización
 expDecl' d (App i (V j (Free name)) (V k var))          | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                    (Lam _ nameVar ty tm) -> do change True
                                                                                                                 return $ subst (V k var) tm
                                                                                     fix                   -> return fix
 expDecl' d (App i (V j (Free name)) (Const k (CNat n))) | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                    (Lam _ nameVar ty tm) -> do change True
                                                                                                                 return $ subst (Const k (CNat n)) tm
                                                                                     fix                   -> return fix
-expDecl' d (App i (V j (Free name)) tm2)                | name == (declName d) = do newVar <- getNewVar ""
+expDecl' d (App i (V j (Free name)) tm2)                | name == (declName d) = do newVar <- getNewVar
                                                                                     case (declBody d) of 
-                                                                                       (Lam k nameVar ty tm) -> do modify (\(_,n) -> (True,n))
+                                                                                       (Lam k nameVar ty tm) -> do change True
                                                                                                                    (expDecl' d (LetIn NoPos newVar ty tm2 tm))
                                                                                        fix                   -> return fix  
-expDecl' d (V i (Free name))                            | name == (declName d) = do modify (\(_,n) -> (True,n))
+expDecl' d (V i (Free name))                            | name == (declName d) = do change True
                                                                                     return (declBody d)  
 
--- casos recursivos                                                                                                 
-expDecl' d (App i tm1 tm2)                = do tm1' <- expDecl' d tm1
+-- casos recursivos  
+-- nos fijamos si en tm1 cambia algo porque si se reduce podemos volver a reducir
+-- si lo hacemos siempre sin checkear, puede quedar en loop infinito                                                                                               
+expDecl' d (App i tm1 tm2)                = do b1 <- getChange
+                                               change False
+                                               tm1' <- expDecl' d tm1
+                                               b2 <- getChange
+                                               change $ b1 || b2
                                                tm2' <- expDecl' d tm2
-                                               return $ App i tm1' tm2'
+                                               if b2 then expDecl' d $ App i tm1' tm2'
+                                                     else return $ App i tm1' tm2'
 expDecl' d (V i var)                      = return $ V i var
 expDecl' d (Const i c)                    = return (Const i c)
 expDecl' d (Lam i name ty tm)             = do tm'  <- expDecl' d tm
@@ -213,24 +225,38 @@ expDecls ds = case shortDecl ds of
 
 expInt' ::  Term -> State (Bool, Int) Term
 -- casos optimización
-expInt' (App i (Lam _ name ty tm) (V k var))          = do modify (\(_,n) -> (True,n))
+expInt' (App i (Lam _ name ty tm) (V k var))          = do change True
                                                            return $ subst (V k var) (tm)
-expInt' (App i (Lam _ name ty tm) (Const k (CNat n))) = do modify (\(_,n) -> (True,n))
+expInt' (App i (Lam _ name ty tm) (Const k (CNat n))) = do change True
                                                            return $ subst (Const k (CNat n)) (tm)
-expInt' (App i (Lam _ name ty tm) tm2)                = do newVar <- getNewVar ""
-                                                           modify (\(_,n) -> (True,n))
+expInt' (App i (Lam _ name ty tm) tm2)                = do newVar <- getNewVar 
+                                                           change True
                                                            expInt' (LetIn NoPos newVar ty tm2 tm)                                                                       
-expInt' (LetIn i name ty (V k var) tm2)               = do modify (\(_,n) -> (True,n))
+expInt' (LetIn i name ty (V k var) tm2)               = do change True
                                                            return $ subst (V k var) (tm2)
-expInt' (LetIn i name ty (Const k (CNat n)) tm2)      = do modify (\(_,n) -> (True,n))
+expInt' (LetIn i name ty (Const k (CNat n)) tm2)      = do change True
                                                            return $ subst (Const k (CNat n)) (tm2)
 -- casos recursivos
-expInt' (App i tm1 tm2)                               = do tm1' <- expInt' tm1
+-- nos fijamos si en tm1 cambia algo porque si se reduce podemos volver a reducir
+-- si lo hacemos siempre sin checkear, puede quedar en loop infinito
+expInt' (App i tm1 tm2)                               = do b1 <- getChange
+                                                           change False
+                                                           tm1' <- expInt' tm1
+                                                           b2 <- getChange
+                                                           change $ b1 || b2 
                                                            tm2' <- expInt' tm2
-                                                           return $ App i tm1' tm2'                                                           
-expInt' (LetIn i name ty tm1 tm2)                     = do tm1' <- expInt' tm1
+                                                           if b2 then expInt' $ App i tm1' tm2'
+                                                                 else return $ App i tm1' tm2'    
+-- nos fijamos si en tm1 cambia algo porque si se reduce podemos volver a reducir
+-- si lo hacemos siempre sin checkear, puede quedar en loop infinito                                                                                                                        
+expInt' (LetIn i name ty tm1 tm2)                     = do b1 <- getChange
+                                                           change False
+                                                           tm1' <- expInt' tm1
+                                                           b2 <- getChange
+                                                           change $ b1 || b2
                                                            tm2' <- expInt' tm2
-                                                           return $ LetIn i name ty tm1' tm2'                                                           
+                                                           if b2 then expInt' $ LetIn i name ty tm1' tm2' 
+                                                                 else return $ LetIn i name ty tm1' tm2'                                                                                                    
 expInt' (V i var)                                     = return $ V i var
 expInt' (Const i c)                                   = return (Const i c)
 expInt' (Lam i name ty tm)                            = do tm'  <- expInt' tm
@@ -258,7 +284,7 @@ expInt (d:ds) = do list <- expInt ds
 ---------------------------------------------------------------------
 
 maxIterations :: Int
-maxIterations = 20
+maxIterations = 5
 
 
 optRound :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
@@ -272,15 +298,19 @@ optimize' :: Int -> [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
 optimize' n ds | n == maxIterations = return ds
                | otherwise          = do res   <- optRound ds  
                                          (b,_) <- get
-                                         if b then do modify (\(_,n) -> (False,n))
+                                         if b then do change False
                                                       optimize' (n+1) res
                                               else return ds
-                                        -- == MUY COSTOSO? VALE LA PENA UNA MONADA DONDE TENGA INFO DE SI SE MODIFICO ALGO?
-
+                                       
 
 optimize :: [Decl Term Ty] -> [Decl Term Ty]
 optimize ds = fst $ runState (optimize' 0 ds) (False, 0)
 
 
--- Muy costoso ==.
--- Ver si se pierde el numero de los let.
+-- Ver comentarios de Clousures (hay que ver si son útiles)
+-- Opt: ver tema tamaño para eliminar
+
+-- Las recursivas.
+-- Le agregamo el let y exp de apps de lam internos.
+-- Casos prueba.
+
