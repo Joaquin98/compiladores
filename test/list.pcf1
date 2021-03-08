@@ -80,7 +80,8 @@ let l2:Nat = add 5 (add 4 (add 3 0))
 let sl2:Nat = mergeSort l2
 
 let xs1:Nat = (add 5 (add 4 (add 3 (add 2 (add 1 0)))))
-let xs2:Nat = (add 4 (add 3 (add 2 (add 1 0))))
+let xs2:Nat =  (add 4 (add 3 (add 2 (add 1 0))))
+let xs22:Nat = (add 23 (add 12 (add 4 (add 2 0))))
 let xs3:Nat = (add 3 (add 2 (add 1 0)))
 let xs4:Nat =  (add 2 (add 1 0))
 
@@ -92,4 +93,4 @@ let rec reverseAux(xs ys:Nat) :Nat =
  let reverse(xs:Nat):Nat = 
     reverseAux xs 0
 
-let sorted:Nat = mergeSort xs2
+let sorted:Nat = mergeSort xs22

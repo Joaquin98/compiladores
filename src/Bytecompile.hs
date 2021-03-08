@@ -139,7 +139,7 @@ convertModule (d:ds) =
 bytecompileModule :: MonadPCF m => [Decl Term Ty] -> m Bytecode
 bytecompileModule []  = return ([10])
 bytecompileModule mod = do printPCF $  show (convertModule (reverse mod))
-                           bc (convertModule (reverse mod))
+                           bc (convertModule mod)
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo 
 bcWrite :: Bytecode -> FilePath -> IO ()

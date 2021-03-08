@@ -147,6 +147,9 @@ shortDecl :: [Decl Term Ty] -> Maybe (Decl Term Ty)
 shortDecl []                                   = Nothing   
 shortDecl [x]                                  = Nothing
 shortDecl (d:ds) | size (declBody d) < maxSize = Just d
+--shortDecl (d:ds) | size (declBody d) < maxSize = case declBody d of
+--                                                   (Fix _ _ _ _ _ _) ->  shortDecl ds
+--                                                   _ -> Just d
                  | otherwise                   = shortDecl ds
 
 
@@ -161,18 +164,19 @@ getNewVar = do (b,n) <- get
 expDecl' :: (Decl Term Ty) -> Term -> State (Bool, Int) Term
 -- casos optimización
 expDecl' d (App i (V j (Free name)) (V k var))          | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> do change True
-                                                                                                                return $ subst (V k var) tm
-                                                                                    fix                   -> return fix
+                                                                                    (Lam ii nameVar ty tm) -> do change True
+                                                                                                                 return $ subst (V k var) tm
+--                                                                                   fix                   -> return fix
+                                                                                    fix                   -> return (App i fix (V k var))
 expDecl' d (App i (V j (Free name)) (Const k (CNat n))) | name == (declName d) = case (declBody d) of
-                                                                                    (Lam _ nameVar ty tm) -> do change True
-                                                                                                                return $ subst (Const k (CNat n)) tm
-                                                                                    fix                   -> return fix
+                                                                                    (Lam ii nameVar ty tm) -> do change True
+                                                                                                                 return $ subst (Const k (CNat n)) tm
+                                                                                    fix                   -> return (App i fix (Const k (CNat n)))
 expDecl' d (App i (V j (Free name)) tm2)                | name == (declName d) = do newVar <- getNewVar
                                                                                     case (declBody d) of 
                                                                                        (Lam k nameVar ty tm) -> do change True
                                                                                                                    (expDecl' d (LetIn NoPos newVar ty tm2 tm))
-                                                                                       fix                   -> return fix  
+                                                                                       fix                   -> return (App i fix  tm2)
 expDecl' d (V i (Free name))                            | name == (declName d) = do change True
                                                                                     return (declBody d)  
 
@@ -225,13 +229,13 @@ expDecls ds = case shortDecl ds of
 
 expInt' ::  Term -> State (Bool, Int) Term
 -- casos optimización
-expInt' (App i (Lam _ name ty tm) (V k var))          = do change True
-                                                           return $ subst (V k var) (tm)
-expInt' (App i (Lam _ name ty tm) (Const k (CNat n))) = do change True
-                                                           return $ subst (Const k (CNat n)) (tm)
-expInt' (App i (Lam _ name ty tm) tm2)                = do newVar <- getNewVar 
-                                                           change True
-                                                           expInt' (LetIn NoPos newVar ty tm2 tm)                                                                       
+expInt' (App i (Lam ii name ty tm) (V k var))          = do change True
+                                                            return $ subst (V k var) tm
+expInt' (App i (Lam ii name ty tm) (Const k (CNat n))) = do change True
+                                                            return $ subst (Const k (CNat n)) tm
+expInt' (App i (Lam ii name ty tm) tm2)                = do newVar <- getNewVar 
+                                                            change True
+                                                            expInt' (LetIn NoPos newVar ty tm2 tm)                                                                       
 expInt' (LetIn i name ty (V k var) tm2)               = do change True
                                                            return $ subst (V k var) (tm2)
 expInt' (LetIn i name ty (Const k (CNat n)) tm2)      = do change True
@@ -314,3 +318,13 @@ optimize ds = fst $ runState (optimize' 0 ds) (False, 0)
 -- Le agregamo el let y exp de apps de lam internos.
 -- Casos prueba.
 
+-- eq x y
+-- sustituye (bound 1) por (bound 1) 
+-- subst (Lang.Const NoPos (CNat 3)) (Lam NoPos "x" NatTy (BinaryOp NoPos Add (Lang.V NoPos (Bound 0)) (Lang.V NoPos (Bound 1))))
+
+
+{-
+eq: (Lam (Lam (IfZ (Add (Diff (Bound 1) (Bound 0)) (Diff (Bound 0) (Bound 1))) (0) (1))))
+mod: (Fix (Lam (IfZ (App (App (Free "eq") (Bound 1)) (Bound 0)) (0) (IfZ (Diff (Bound 1) (Bound 0)) (Bound 1)
+ (App (App (Bound 2) (Diff (Bound 1) (Bound 0))) (Bound 0))))))
+-}

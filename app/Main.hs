@@ -135,7 +135,7 @@ compileToBytecode :: (MonadPCF m, MonadMask m) => [String] -> m (Bytecode)
 compileToBytecode []         = undefined
 compileToBytecode (arg:args) = do compileFile' arg
                                   s <- get 
-                                  bytecompileModule (glb s)
+                                  bytecompileModule $ optimize $ reverse (glb s)
 
 
 compileToLLVM :: (MonadPCF m, MonadMask m) => [String] -> m (Module)

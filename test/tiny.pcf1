@@ -1,51 +1,57 @@
-#let x : Nat = 3
-#let k : Nat = 67575
+let x : Nat = 3
+let k : Nat = 67575
 
-#type N = Nat
+type N = Nat
 
-#let a : Nat = let x:Nat = 3 in x
+let a : Nat = let x:Nat = 3 in x
 
-#let f (x : Nat) : Nat = succ x
+let f (x : Nat) : Nat = succ x
 
-#let z:Nat = f 2
+let z:Nat = f 2
 
-#let g (x:Nat):Nat = let y:Nat = 45 in f x
+let g (x:Nat):Nat = let y:Nat = 45 in f x
 
-#let rec suma(x y:Nat):Nat = ifz x then y else (suma (pred x) (succ y))
+let rec suma(x y:Nat):Nat = ifz x then y else (suma (pred x) (succ y))
 
-#let rec mult(x y : N):Nat =ifz y then 0 else x + (mult x (pred y))
+let rec mult(x y : N):Nat =ifz y then 0 else x + (mult x (pred y))
 
-#let rec exp(x y : N):Nat = ifz y then 1 else mult x (exp x (pred y))
+let rec exp(x y : N):Nat = ifz y then 1 else mult x (exp x (pred y))
 
-#let rec fact (x:N):Nat =  ifz x then 1 else mult x (fact (pred x))
+let rec fact (x:N):Nat =  ifz x then 1 else mult x (fact (pred x))
 
-#let res : Nat = suma 3 435
+let res : Nat = suma 3 435
 
-#let res2 : Nat = mult 5 5
-#let res3 : Nat = exp 2 3
-#let res4 : Nat = fact 7
-#let res2 : Nat = g 34
+let res2 : Nat = mult 5 5
+let res3 : Nat = exp 2 3
+let res4 : Nat = fact 7
+let res5 : Nat = g 34
 
-#let rec fib(x:Nat):Nat = ifz x then 1 else (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
+let rec fib(x:Nat):Nat = ifz x then 1 else (ifz pred x then 1 else  (fib (pred x)) + (fib (pred (pred x))))
 
-#let fibb : Nat = fib 20
+let fibb : Nat = fib 20
 
-#let p (x:Nat) : Nat = ifz x then (ifz 0 then 5 else 6) else x 
+let p (x:Nat) : Nat = ifz x then (ifz 0 then 5 else 6) else x 
 
-#let res : Nat = p 0
+let res6 : Nat = p 0
 
 
-#let rec mult (x y: Nat) : Nat = ifz y then 0 else x + (mult x (y-1))
-#let ans : Nat = mult 3 4
+let rec mult2 (x y: Nat) : Nat = ifz y then 0 else x + (mult2 x (y-1))
+let ans : Nat = mult 3 4
 
 
 let z1:Nat = 4
 
-let suma (x y:Nat):Nat = x + y
-let resta (x y:Nat):Nat = x - y
-let ans:Nat = suma (resta z1 z1) (suma (resta z1 3) (suma 1 2))
+let suma2 (x y:Nat):Nat = x + y
+let resta2 (x y:Nat):Nat = x - y
+let ans3:Nat = suma (resta2 z1 z1) (suma2 (resta2 z1 3) (suma2 1 2))
 
 
-let ans2:Nat = suma (resta 5 1) 4
+let ans2:Nat = suma2 (resta2 5 1) (mult 3 4)
 
 #let _x:Nat = (fun(y:Nat) -> y + 2) 3
+
+#let val:Nat = 5
+#let final:Nat = suma2 val val
+
+
+

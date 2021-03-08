@@ -71,3 +71,5 @@ let res8:Nat = fact 5
 let x4:Nat = let x2:Nat = 343 in (x2 + res2) + res1
 
 let res:Nat = (doble (mult 3 2)) + (doble (mult 3 2)) 
+
+let res55:Nat = ((doble (mult 3 2)) + (doble (mult 3 2))) + ((exp 1 10000) + (gcd 9883 9887))

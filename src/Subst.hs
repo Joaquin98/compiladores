@@ -74,7 +74,10 @@ substN ns t = varChanger (\_ p n -> V p (Free n)) bnd t
    where bnd depth p i 
              | i <  depth = V p (Bound i)
              | i >= depth && i < depth + nns = nsr !! (i - depth)
-             | otherwise = abort $ "substN: M is not LC" ++ show(ns) ++ show(t) ++ show(i) ++ show(depth)
+--             | otherwise = V p (Bound i)   Solución!
+             | otherwise = abort $ "substN: M is not LC" ++ 
+             "\nLista de valores que tomarian las variables ligadas: \n" ++ show(ns) 
+             ++ "\nTermino en el que se reemplazarian: \n" ++ show(t) ++ "\n" ++ show(i) ++ " " ++ show(depth)
          nns = length ns
          nsr = reverse ns
 
