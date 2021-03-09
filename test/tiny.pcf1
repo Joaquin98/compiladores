@@ -46,7 +46,7 @@ let resta2 (x y:Nat):Nat = x - y
 let ans3:Nat = suma (resta2 z1 z1) (suma2 (resta2 z1 3) (suma2 1 2))
 
 
-let ans2:Nat = suma2 (resta2 5 1) (mult 3 4)
+let ans2:Nat = suma2 (resta2 5 1) 5
 
 #let _x:Nat = (fun(y:Nat) -> y + 2) 3
 

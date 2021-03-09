@@ -193,8 +193,9 @@ expDecl' d (App i tm1 tm2)                = do b1 <- getChange
                                                      else return $ App i tm1' tm2'
 expDecl' d (V i var)                      = return $ V i var
 expDecl' d (Const i c)                    = return (Const i c)
-expDecl' d (Lam i name ty tm)             = do tm'  <- expDecl' d tm
-                                               return $ Lam i name ty tm'
+expDecl' d (Lam i name ty tm)             = do vname <- getNewVar 
+                                               tm'  <-  expDecl' d (open vname tm)
+                                               return $ Lam i name ty (close vname tm')
 expDecl' d (BinaryOp i op tm1 tm2)        = do tm1' <- expDecl' d tm1
                                                tm2' <- expDecl' d tm2
                                                return $ BinaryOp i op tm1' tm2'
@@ -202,11 +203,14 @@ expDecl' d (IfZ i c tm1 tm2)              = do c'   <- expDecl' d c
                                                tm1' <- expDecl' d tm1
                                                tm2' <- expDecl' d tm2
                                                return $ IfZ i c' tm1' tm2'
-expDecl' d (Fix i fname fty aname aty tm) = do tm'  <- expDecl' d tm
-                                               return $ Fix i fname fty aname aty tm'
+expDecl' d (Fix i fname fty aname aty tm) = do vfname <- getNewVar
+                                               vaname <- getNewVar 
+                                               tm'  <- expDecl' d (openN [vfname, vaname] tm)
+                                               return $ Fix i fname fty aname aty (closeN [vfname, vaname] tm')
 expDecl' d (LetIn i name ty tm1 tm2)      = do tm1' <- expDecl' d tm1
-                                               tm2' <- expDecl' d tm2
-                                               return $ LetIn i name ty tm1' tm2'
+                                               vname <- getNewVar  
+                                               tm2' <- expDecl' d (open vname tm2)
+                                               return $ LetIn i name ty tm1' (close vname tm2')
 
 
 expDecl :: (Decl Term Ty) -> [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
@@ -226,6 +230,25 @@ expDecls ds = case shortDecl ds of
 -- EXPANSIÓN DE EXPRESIONES INTERNAS:
 -- expandimos llamadas a funciones Lam 
 --y Lets que tengan una variable o constante
+
+{-
+suma: (Lam (Lam (Add (Bound 1) (Bound 0))))
+sumar: (Lam (Lam (App (App (Lam (Lam (Add (Bound 1) (Bound 0)))) (Bound 0)) (Bound 1))))
+
+
+(App (App (Lam (Lam (Add (Bound 1) (Bound 0)))) (Bound 0)) (Bound 1))
+
+fun :: [Term] -> Term -> State (Bool, Int) Term
+fun args (App i lam@(Lam ii name ty tm) (V k var))
+fun args (App i app@(App ii tm1 tm2) (V k var))         = do fun ((V k var):args) app
+fun args (App i app@(App ii tm1 tm2) (Const k (CNat n)) = do fun ((Const k (CNat n)):args) app
+fun args (App i app@(App ii tm1 tm2) tmComplex)         = do newVar <- getNewVar
+                                                             tm' <- fun ((V k newVar):args) app 
+                                                             return (LetIn i newVar ty tmComplex tm') fun'
+
+
+(sdfsdaf asdfsdaf Let "nombreFresco" = (Bound 3) (Free "suma") (Bound 3) sdafsadfsafsadf)
+-}
 
 expInt' ::  Term -> State (Bool, Int) Term
 -- casos optimización
@@ -253,18 +276,20 @@ expInt' (App i tm1 tm2)                               = do b1 <- getChange
                                                                  else return $ App i tm1' tm2'    
 -- nos fijamos si en tm1 cambia algo porque si se reduce podemos volver a reducir
 -- si lo hacemos siempre sin checkear, puede quedar en loop infinito                                                                                                                        
-expInt' (LetIn i name ty tm1 tm2)                     = do b1 <- getChange
+expInt' (LetIn i name ty tm1 tm2)                     = do vname <- getNewVar 
+                                                           b1 <- getChange
                                                            change False
                                                            tm1' <- expInt' tm1
                                                            b2 <- getChange
                                                            change $ b1 || b2
-                                                           tm2' <- expInt' tm2
-                                                           if b2 then expInt' $ LetIn i name ty tm1' tm2' 
-                                                                 else return $ LetIn i name ty tm1' tm2'                                                                                                    
+                                                           tm2' <- expInt' (open vname tm2)
+                                                           if b2 then expInt' $ LetIn i name ty tm1' (close vname tm2') 
+                                                                 else return $ LetIn i name ty tm1' (close vname tm2')                                                                                                    
 expInt' (V i var)                                     = return $ V i var
 expInt' (Const i c)                                   = return (Const i c)
-expInt' (Lam i name ty tm)                            = do tm'  <- expInt' tm
-                                                           return $ Lam i name ty tm'
+expInt' (Lam i name ty tm)                            = do vname <- getNewVar 
+                                                           tm'  <- expInt' (open vname tm)
+                                                           return $ Lam i name ty (close vname tm')
 expInt' (BinaryOp i op tm1 tm2)                       = do tm1' <- expInt' tm1
                                                            tm2' <- expInt' tm2
                                                            return $ BinaryOp i op tm1' tm2'
@@ -272,8 +297,10 @@ expInt' (IfZ i c tm1 tm2)                             = do c'   <- expInt' c
                                                            tm1' <- expInt' tm1
                                                            tm2' <- expInt' tm2
                                                            return $ IfZ i c' tm1' tm2'
-expInt' (Fix i fname fty aname aty tm)                = do tm'  <- expInt' tm
-                                                           return $ Fix i fname fty aname aty tm'
+expInt' (Fix i fname fty aname aty tm)                = do vaname <- getNewVar 
+                                                           vfname <- getNewVar 
+                                                           tm'  <-  expInt' (openN [vfname, vaname] tm)
+                                                           return $ Fix i fname fty aname aty (closeN [vfname, vaname] tm')
 
 
 expInt :: [Decl Term Ty] -> State (Bool, Int) [Decl Term Ty]
