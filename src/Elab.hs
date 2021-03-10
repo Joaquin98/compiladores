@@ -21,7 +21,8 @@ import Common
 ------------------------ FUNCIONES GENERALES ------------------------
 ---------------------------------------------------------------------
 
--- Reemplaza los sinonimos de tipos en un termino por lo que representa. 
+-- Reemplaza los sinonimos de tipos en un termino por lo que representan. 
+-- Desazucarea los tipos en un termino. (Pasa de SN (Sugar-Typed Named) a N (Named)).
 rmvSynTerm :: MonadPCF m => SNTerm -> m (NTerm)
 rmvSynTerm (V i name)                = return (V i name)  
 rmvSynTerm (Const i c)               = return (Const i c)  
@@ -51,7 +52,8 @@ rmvSynTerm (LetIn i n ty t t')       = do nty  <- styToTy ty
 --rmvSynTerm (UnaryOp i op t) = do tTy <- rmvSynTerm t
 --                                 return (UnaryOp i op tTy)
 
--- Convierte un tipo con sinonimos en uno sin sinonimos.
+-- Convierte un tipo con sinonimos en uno sin sinonimos recursivamente.
+-- Se usa para hacer el rmvSynTerm.
 styToTy :: MonadPCF m => STy -> m (Ty)
 styToTy (DTy name)         = do mty <- lookupSynTy name
                                 case mty of 
@@ -69,18 +71,26 @@ binderExp []             = []
 binderExp (([x], t):bs)  = (x, t): (binderExp bs)
 binderExp ((x:xs, t):bs) = (x, t): (binderExp ((xs, t) : bs))
 
+-- Convierte UnaryBind a Multibind (pone el nombre en una lista).
+-- Se usa en desugar par que tipe en algunos casos.
+unaryToMulti :: [(UnaryBind, a)] -> [(MultiBind, a)] 
+unaryToMulti = map (\(ni,ti)->([ni],ti))
 
 ---------------------------------------------------------------------
 -------------------- FUNCIONES PARA DECLARACIONES -------------------
 ---------------------------------------------------------------------
 
+-- Expande los bindings de una declaración (de multi a unary)
+-- Solo los bindings exteriores, no toca el término del  declBody.
 expBindersD :: SDecl SMNTerm MultiBind STy -> SDecl SMNTerm UnaryBind STy
 expBindersD (DTer i name bs ty b term) = DTer i name (binderExp bs) ty b term
 expBindersD (DType i name ty)          = DType i name ty
 
-unaryToMulti :: [(UnaryBind, a)] -> [(MultiBind, a)] 
-unaryToMulti = map (\(ni,ti)->([ni],ti))
-
+-- Desazucarea las declaraciones de términos (solo la declaración, no toca el declBody)
+-- En ese caso devuelve Right.
+-- Si es una declaración de tipos la deja tal cual y devuelve Left.
+-- Hacemos esto porque en las declaraciones desazucaradas no hay declaraciones de tipos, 
+-- y no las podemos eliminar hasta sacar los sinónimos de tipos.
 desugarD :: SDecl SMNTerm UnaryBind STy -> Either (SDecl SMNTerm UnaryBind STy) (Decl SMNTerm STy)
 desugarD (DTer i name [] ty False term)      = Right (Decl i name ty term)
 desugarD (DTer i name (b:bs) ty False term)  = let ts = getFunType (b:bs) ty
@@ -99,6 +109,8 @@ elabD = desugarD . expBindersD
 ---------------------- FUNCIONES PARA TÉRMINOS ----------------------
 ---------------------------------------------------------------------
 
+-- Expande los binders recursivamente en un término.
+-- Pasa de SMN (Sugar-Typed, Multibinded, Named) a SUN (Sugar-Typed, Unary-Binded, Named)
 expBinders :: SMNTerm -> SUNTerm
 expBinders (SV info var)                    = SV info var
 expBinders (SConst info const)              = SConst info const
@@ -112,16 +124,19 @@ expBinders (SIfZ info c t1 t2)              = SIfZ info (expBinders c) (expBinde
 expBinders (SLetIn info name binds ty t t') = SLetIn info name (binderExp binds) ty (expBinders t) (expBinders t')
 expBinders (SRec info name binds ty t t')   = SRec info name (binderExp binds) ty (expBinders t) (expBinders t')
 
-
+-- Dados una lista de binders y el tipo de retorno, retorna el tipo de la función (azucarado).
 getFunType :: [(Name, STy)] -> STy -> STy
 getFunType [(n, t)] ty    = SFunTy t ty
 getFunType ((n, t):bs) ty = SFunTy t (getFunType bs ty)
 
-
+-- Asigna a cada operación unaria la operación binaria correspondiente.
 unaryToBinary :: UnaryOp -> BinaryOp
 unaryToBinary Succ = Add
 unaryToBinary Pred = Diff 
 
+-- Desazucarea un término. Pasa de SUN (Sugar-Typed, Unary-Binded, Named)
+-- a SN (Sugar-Typed, Named). El SUNTerm es un STerm (tiene términos del lenguaje
+-- externo), mientras que el SNTerm es un Term (tiene términos del lenguaje interno).
 desugar :: SUNTerm -> SNTerm
 desugar (SV info var)                      = V info var 
 desugar (SConst info c)                    = Const info c 
@@ -146,6 +161,7 @@ desugar (SRec info name binds ty t t')     = let funTy   = (getFunType (tail bin
 
 -- | 'elabLN' transforma variables ligadas en índices de de Bruijn
 -- en un término dado. 
+-- Pasa de NTerm (Named) a simplemente Term. 
 elabLN :: NTerm -> Term
 elabLN (V p v)               = V p (Free v)
 elabLN (Const p c)           = Const p c

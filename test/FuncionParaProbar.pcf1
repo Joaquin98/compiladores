@@ -40,5 +40,5 @@ let a:Pair = mkp 3 4
 # PCF> s a
 # 3 : N
 # PCF> s b
-let r:N = let a:Pair = mkp 3 4 in f a
 let ff (p:Pair)(fu:Pair->N) : N = fu (mkp (fib (f p)) (fib (s p)))
+let r:N = let a:Pair = mkp 3 4 in f a

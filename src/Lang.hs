@@ -71,7 +71,9 @@ data Tm info var ty =
   | LetIn info Name ty (Tm info var ty) (Tm info var ty)
   deriving (Show, Functor, Eq)
 
-
+-- AST de los términos antes del desugar.
+-- Permite variar los bindings porque aceptamos multibinding y luego lo
+-- convertimos a unary binding (usando el mismo AST).
 data STm info var bind ty = 
     SV info var
   | SConst info Const
@@ -86,14 +88,29 @@ data STm info var bind ty =
   | SRec info Name [(bind, ty)] ty (STm info var bind ty) (STm info var bind ty)
   deriving (Show, Functor)
 
+-- Tipos de binding
 type UnaryBind = Name
 type MultiBind = [Name]
 
+-- SMN : Sugar-Typed Multi-Binded Named
+-- Términos azucarados, tipos azucarados, variables con nombres y multibinding.
 type SMNTerm = STm Pos Name MultiBind STy
+
+-- SUN : Sugar-Typed Unary-Binded Named
+-- Términos azucarados, tipos azucarados,  variables nomrbes y unary binding.
 type SUNTerm = STm Pos Name UnaryBind STy
 
+-- SNTerm : Sugar-Typed Named
+-- Términos desazucarados, tipos azucarados, variables con nombres.
 type SNTerm = Tm Pos Name STy
+
+-- NTerm : Named 
+-- Términos desazucarados, variables con nombres, tipos desazucarados
 type NTerm = Tm Pos Name Ty  -- ^ 'Tm' tiene 'Name's como variables ligadas y libres, guarda posición
+
+-- Term
+-- Términos desazucarados, variables ligadas con índice de Bruijn
+-- Términos del lenguaje interno.
 type Term = Tm Pos Var Ty    -- ^ 'Tm' con índices de De Bruijn como variables ligadas, different type of variables, guarda posición
 
 

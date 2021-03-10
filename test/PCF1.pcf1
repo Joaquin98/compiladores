@@ -1,6 +1,9 @@
+# Archivo con funciones varias (algunas de las primeras prácticas) para ir probando
+
+# definicion de tipo
 type N = Nat
 
-
+# definiciones de funciones
  
 let rec suman(x:N):N = ifz x then 0 else  (x + (suman (pred x))) 
 
@@ -26,33 +29,31 @@ let rec gcd2(n m : N):Nat =  ifz n then m else
                              ifz m then n else 
                              ifz (resta n m) then gcd2 (resta m n) n else gcd2 m (resta n m)
 
-#let min':Nat = fix (m:Nat->(Nat->Nat)->Nat) (n:Nat) -> fun(f:Nat->Nat) -> ifz f n then n else m (succ n) f
 
-#let min:Nat = min' 0 
-
-#let f:(Nat -> Nat) = fun(x:Nat) -> resta 3 x
-
-#let R:Nat = fix(r:Nat->(Nat->Nat->Nat)->Nat->Nat) (a:Nat) -> fun(b:Nat->Nat->Nat) -> fun(n:Nat) -> 
-#    ifz n then a else b (r a b (pred n)) (pred n)
-
-let x : Nat = 3
-let y : Nat = x + 4
-
-let z : Nat = doble y
-
+# funciones recursivas de cola
 
 let rec multC2( a b ac :N):Nat = ifz b then ac else multC2 a (pred b) (ac + a)  
+
 let multC(a b : N):Nat  = multC2 a b 0
+
 let rec expC2(a b ac : N):Nat = ifz b then ac else (expC2 a (pred b) (multC a ac))
+
 let expC(a b : N):Nat = expC2 a b 1
 
 
-
+# Prueba de eficiencia de llamada de cola:
 # 8.000.000.000 bytes
 #let znc:N = (exp 1 1000000) + (gcd 9883 9887)  
 # 264.000.000 bytes
 #let zc:N = (expC 1 1000000) + (gcd 9883 9887)  
 
+
+# pruebas que fuimos haciendo
+
+let x : Nat = 3
+let y : Nat = x + 4
+
+let z : Nat = doble y
 
 
 let res1:Nat = suman 10

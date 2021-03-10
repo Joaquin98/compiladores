@@ -1,6 +1,6 @@
 module CIR where
 
-import Lang ( BinaryOp,UnaryOp(..), Const(CNat), Name, UnaryOp, IrDecl(IrVal,IrFun),IrDecls,IrTm(IrVar,IrCall,IrConst,IrBinaryOp,IrLet,IrIfZ,MkClosure,IrAccess))
+import Lang 
 import Data.List (intercalate,isPrefixOf)
 import Control.Monad.Writer
 import Control.Monad.State.Lazy
@@ -65,9 +65,8 @@ instance Show CanonProg where
     pr1 (Right v) =
       "declare " ++ v ++ "\n\n"
 
-{-
-  Canonicaliza una sola declaración del lenguaje intermedio.
--}
+
+-- Canonicaliza una sola declaración del lenguaje intermedio.
 runCanon' :: IrDecl -> StateT (Int,Loc,[Inst]) (Writer Blocks) CanonVal
 runCanon' (IrVal name tm)         = return name
 runCanon' (IrFun name _ args tm)  = do setLoc name
@@ -75,13 +74,9 @@ runCanon' (IrFun name _ args tm)  = do setLoc name
                                        closeBlock (Return tm')
                                        return ""
 
-{-
-  Canonicaliza una lista de declaraciones, manteniendo el estado
-  (número necesario para obtener nombres frescos) entre las
-  canonicalizaciones de cada elemento.
-
-  Es necesaria la segunda linea de vals?
--}
+-- Canonicaliza una lista de declaraciones, manteniendo el estado
+-- (número necesario para obtener nombres frescos) entre las
+-- canonicalizaciones de cada elemento.
 runSavingState :: [IrDecl] -> (Int,Loc,[Inst]) -> [Either CanonFun CanonVal]
 runSavingState (fun@(IrFun name _ args tm):xs) initS  = let funC = runCanon' fun 
                                                             ((val,state),list) = runWriter (runStateT funC initS)
@@ -90,77 +85,83 @@ runSavingState vals initS                             = let ((val,state),list) =
                                                             ((val2,state2),list2) = runWriter (runStateT (mapM runCanon' vals) initS)
                                                         in (map (\x -> Right x) val2) ++ [Left ("pcfmain",[],list)]
 
-{-
-  Declara cada una de las variables dentro del main.
--}
+
+-- Función auxiliar de makeMain que declara cada una de las 
+-- variables dentro del main.
 makeMain' :: IrDecls -> StateT (Int,Loc,[Inst]) (Writer Blocks) Val
 makeMain' [(IrVal name tm)]    = do tm' <- irToBlocks tm
                                     r  <- getNewReg ""
                                     addInst $ Assign r (UnOp Print tm')
-                                    addInst $ Store name (V (R r))
+                                    addInst $ Store name (CIR.V (R r))
                                     return tm'
 makeMain' ((IrVal name tm):xs) = do tm' <- irToBlocks tm
-                                    addInst $ Store name (V tm')
+                                    addInst $ Store name (CIR.V tm')
                                     makeMain' xs
 
 
-{-
-  Abre y cierra el main, delegando el resto a makeMain'.
--}
+
+-- Abre y cierra el main, delegando el resto a makeMain'.
 makeMain :: IrDecls -> StateT (Int,Loc,[Inst]) (Writer Blocks) ()
 makeMain decls = do setLoc "pcfmain"
                     val <- makeMain' decls
                     closeBlock (Return val)
 
-{-
-  Toma la lista de declaraciones y deja los valores al final.
-  De forma que primero se creen los bloques de las funciones
-  y luego se puede crear el main con los valores.
--}
+
+--  Toma la lista de declaraciones y deja los valores al final.
+--  De forma que primero se creen los bloques de las funciones
+--  y luego se puede crear el main con los valores.
 valsAtBottom :: IrDecls -> IrDecls -> IrDecls -> IrDecls
 valsAtBottom [] funs vals                              = funs ++ vals
 valsAtBottom (val@(IrVal name tm):xs) funs vals        = valsAtBottom xs funs (val:vals)
 valsAtBottom (fun@(IrFun name _ args tm):xs) funs vals = valsAtBottom xs (fun:funs) vals
 
 
-{-
-  Ordena las declaraciones para luego crear los bloques de cada
-  funciones y al final el main que declara las variables.
--}
+-- Ordena las declaraciones para luego crear los bloques de cada
+-- funciones y al final el main que declara las variables.
 runCanon :: IrDecls -> CanonProg
 runCanon decls = let orderedDecls = valsAtBottom decls [] []
                      funsBlocks   = runSavingState orderedDecls (0,"",[])
                  in CanonProg funsBlocks 
 
 
--- Fijarse que se use el name
+-- Devuelve un registro con un nombre fresco construido con el número del
+-- estado de la mónada y el nombre que se pasa por parámetro.
 getNewReg :: String -> StateT (Int,Loc,[Inst]) (Writer Blocks) Reg
 getNewReg name = do (n,_,_) <- get
                     modify (\(a,b,c) -> (a+1,b,c))
                     return $ Temp $ "reg" ++ name ++ show(n)
 
+-- Devuelve un Loc con un nombre fresco construido con el número del
+-- estado de la mónada y el nombre que se pasa por parámetro.
 getNewLoc :: String -> StateT (Int,Loc,[Inst]) (Writer Blocks) String
 getNewLoc name = do (n,_,_) <- get
                     modify (\(a,b,c) -> (a+1,b,c))
                     return $ name ++ show(n)
 
+-- Agrega una instrucción al bloque en construcción, modificando la lista
+-- de instrucciones que está en el estado de la mónada.
 addInst :: Inst -> StateT (Int,Loc,[Inst]) (Writer Blocks) ()
 addInst i = do modify (\(n,l,is) -> ((n,l,is ++ [i])))
                return ()             
 
+-- Setea el nombre del bloque nuevo (que se acaba de abrir).
 setLoc :: Loc -> StateT (Int,Loc,[Inst]) (Writer Blocks) ()
 setLoc newL = do modify (\(n,l,is) -> (n,newL,is))      
                  return ()      
                  
+-- Cierra el bloque en construcción. Resetea el nombre (Loc) y la lista
+-- de instrucciones del estado, y el bloque ya cerrado (que contiene
+-- el nombre anterior, la lista de inst anterior y el terminador) se escribe
+-- en la mónada Writer.
 closeBlock :: Terminator -> StateT (Int,Loc,[Inst]) (Writer Blocks) ()
 closeBlock ter = do (n,l,is) <- get
                     modify (\(n,l,is) -> (n,"",[]))
                     tell $ [(l,is,ter)]
                     return ()
 
-{-
-  Convierte un termino en bloques.
--}
+
+-- Convierte un termino en bloques.
+
 irToBlocks :: IrTm -> StateT (Int,Loc,[Inst]) (Writer Blocks) Val
 irToBlocks (IrVar name)              | isPrefixOf "__" name = return (R (Temp name))
                                      | otherwise            = return (G name) 
@@ -170,7 +171,7 @@ irToBlocks (IrCall tm tms)           = do r1  <- getNewReg ""
                                           addInst $ Assign r1 (Call tm' tms')
                                           return $ R r1
 irToBlocks (IrConst (CNat n))        = do r <- getNewReg ""
-                                          addInst $ Assign r (V (C n))
+                                          addInst $ Assign r (CIR.V (C n))
                                           return (R r)
 irToBlocks (IrBinaryOp op t1 t2)     = do r  <- getNewReg ""
                                           t1' <- irToBlocks t1
@@ -178,7 +179,7 @@ irToBlocks (IrBinaryOp op t1 t2)     = do r  <- getNewReg ""
                                           addInst $ Assign r (BinOp op t1' t2')
                                           return (R r)
 irToBlocks (IrLet name t1 t2)        = do t1' <- irToBlocks t1
-                                          addInst $ Assign (Temp name) (V t1')
+                                          addInst $ Assign (Temp name) (CIR.V t1')
                                           t2' <- irToBlocks t2
                                           return $ t2'
 irToBlocks (IrIfZ c t1 t2)           = do lEntry <- getNewLoc "entry"

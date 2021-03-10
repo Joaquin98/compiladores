@@ -77,11 +77,15 @@ pattern TAILCALL = 15
 type Env = [Val]
 data Val = I Int | Fun Env Bytecode | RA Env Bytecode deriving (Show)
 
-
+-- Corre el bc' y le agrega al final una instrucción para
+-- que imprima en pantalla el resultado final.
 bc :: MonadPCF m => Term -> m Bytecode
 bc t = do bytecode <- bc' t
           return(bytecode ++ [PRINT,STOP])
 
+-- Función mutuamente recusiva con bc' que colabora en la 
+-- generación de bytecode. Agregada cuando se implementaron 
+-- las tailcall.
 tcompile :: MonadPCF m => Term -> m Bytecode
 tcompile (App _ f e)         = do fc <- bc' f
                                   ec <- bc' e
@@ -96,6 +100,8 @@ tcompile (LetIn _ _ _ t1 t2) = do t1c <- bc' t1
 tcompile t                   = do tc <- bc' t
                                   return(tc ++ [RETURN])         
 
+-- Función auxiliar de bc que toma un término y lo convierte
+-- en una secuencia de instrucciones de bytecode.
 bc' :: MonadPCF m => Term -> m Bytecode
 bc' (V _ (Bound i))         = return [ACCESS,i] 
 bc' (Const _ (CNat n))      = return [CONST,n]
@@ -129,15 +135,16 @@ bc' x                       = do printPCF $ show x
 --                             return (t' ++ [PRED])
 
 
-
+-- Toma el progarama (una lista de declaraciones) y lo convierte en un solo termino
+-- reemplazando las declaraciones por letIn. 
 convertModule :: [Decl Term Ty] -> Term
 convertModule [d]    = declBody d
 convertModule (d:ds) = 
    (LetIn NoPos (declName d) (declType d) (declBody d) (close (declName d) (convertModule ds)))
 
-
+-- Convierte un programa a bytecode.
 bytecompileModule :: MonadPCF m => [Decl Term Ty] -> m Bytecode
-bytecompileModule []  = return ([10])
+bytecompileModule []  = return ([STOP])
 bytecompileModule mod = do printPCF $  show (convertModule (reverse mod))
                            bc (convertModule mod)
 
@@ -153,9 +160,14 @@ bcWrite bs filename = BS.writeFile filename (encode $ BC $ fromIntegral <$> bs)
 bcRead :: FilePath -> IO Bytecode
 bcRead filename = map fromIntegral <$> un32  <$> decode <$> BS.readFile filename
 
+-- Corre runBC' inicializando las dos listas como vacías.
 runBC :: Bytecode -> IO ()
 runBC c = runBC' c [] []
 
+-- Evalua un código Bytecode valiéndose de dos listads de valores.
+-- Una es el entorno que se va generando al correr las instrucciones
+-- cuando aparecen variables.
+-- La otra es la pila.
 runBC' :: Bytecode -> [Val] -> [Val] -> IO ()
 runBC' (STOP:c) _ _                     = return ()
 runBC' (PRINT:c) e (v:s)                = do putStrLn (show v)

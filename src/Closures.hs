@@ -13,9 +13,13 @@ getName name = do n <- get
                   modify (+1)
                   return $ "__" ++ name ++ show(n)  
 
--- Dado un termino, retorna las variables libres que se encuentran en él.
+-- Dado un termino, retorna las variables libres (externas, boundeadas fuera del término) 
+-- que se encuentran en él. Ignoramos las variables globales (definidas en otras declaraciones).
+-- Reconocemos las variables libres de las globales porque son las que no empiezan con "__".
+-- Todos los nombres frescos empiezan con "__" y las globales es imposible que lo hagan.
 freeVars' :: Term -> StateT Int (Writer [IrDecl]) [Name]
 freeVars' t = return $ toList $ fromList $ filter (\name -> isPrefixOf "__" name) (freeVars t)
+
 
 namesToIrTms :: [Name] -> [IrTm]
 namesToIrTms = map (\name -> IrVar name)

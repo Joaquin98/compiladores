@@ -59,11 +59,11 @@ parseMode =
      flag' Typecheck (long "typechek" <> short 't' <> help "Solo chequea tipos") 
      <|>  flag' Bytecompile (long "bytecompile" <> short 'c' <> help "Compila a la BVM")
      <|>  flag' ClosureConvert (long "cc" <> help "Convierte a clausuras")
-     <|>  flag' LLVMConvert (long "llvmconvert" <> short '1' <> help "Convierte a codigo LLVM")
-     <|>  flag' LLVMRun (long "llvmrun" <> short '2' <> help "Ejecuta codigo LLVM")
+     <|>  flag' LLVMConvert (long "llvmc" <> help "Convierte a codigo LLVM")
+     <|>  flag' LLVMRun (long "llvmr"  <> help "Ejecuta codigo LLVM")
      <|>  flag' Run (long "run" <> short 'r' <> help "Ejecuta bytecode en la BVM")
      <|>  flag Interactive Interactive (long "interactive" <> short 'i' <> help "Ejecuta de forma interactiva")
-     <|>  flag' Process (long "process" <> short 'p' <> help "Procesa el programa y lo muestra")
+     <|>  flag' Process (long "process" <> short 'p' <> help "Procesa el programa y lo muestra. Usar para ver el programa optimizado.")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
 parseArgs :: Parser (Mode,[FilePath])
@@ -106,11 +106,14 @@ main = execParser opts >>= go
                                   _ -> return ()
 
 
-
+-- Toma un programa (Lista de declaraciones) y lo convierte en un string
+-- para imprimirlo de forma más legible. Lo usamos en process para imprimir
+-- el programa post-optimizaciones y ver cómo quedó.
 programToString :: [Decl Term Ty] -> String
 programToString []     = ""
 programToString (d:ds) = (declName d) ++ ": " ++ termToString (declBody d) ++ "\n" ++ (programToString ds) 
 
+-- Convierte un término en un string para usarlo en programToString.
 termToString :: Term -> String 
 termToString (V _ v)                         = "(" ++ show v ++ ")"
 termToString (Lang.Const _ (CNat n))         = "(" ++ show n ++ ")"
@@ -122,35 +125,39 @@ termToString (IfZ i c tm1 tm2)               = "(" ++"IfZ " ++ (termToString c) 
 termToString (LetIn i name ty tm1 tm2)       = "(" ++"Let " ++ name ++ " " ++ (termToString tm1) ++ " in " ++ (termToString tm2) ++ ")"
 
 
+-- Finaliza la compilación (común a cualquier tipo de compilación)
 finishCompile :: (MonadPCF m, MonadMask m) => m a -> InputT m (Maybe a)
 finishCompile m = do lift $ catchErrors m
 
+-- Compila a clausuras
 compileToClosures :: (MonadPCF m, MonadMask m) => [String] -> m ([IrDecl])
 compileToClosures []         = undefined
 compileToClosures (arg:args) = do compileFile' arg 
                                   s <- get
                                   return $ runCC (glb s)
 
+-- Compila a bytecode
 compileToBytecode :: (MonadPCF m, MonadMask m) => [String] -> m (Bytecode)
 compileToBytecode []         = undefined
 compileToBytecode (arg:args) = do compileFile' arg
                                   s <- get 
                                   bytecompileModule $ optimize $ reverse (glb s)
 
-
+-- Compila a LLVM
 compileToLLVM :: (MonadPCF m, MonadMask m) => [String] -> m (Module)
 compileToLLVM []         = undefined
 compileToLLVM (arg:args) = do compileFile' arg
                               s <- get
-                              return $  (codegen . runCanon . runCC .  reverse) (glb s)
+                              return $  (codegen . runCanon . runCC . optimize. reverse) (glb s)
 
+-- Devuelve el programa procesado y optimizado
 processedProgram :: (MonadPCF m, MonadMask m) => [String] -> m ([Decl Term Ty])
 processedProgram []         = undefined
 processedProgram (arg:args) = do compileFile' arg
                                  s <- get
                                  return $  (reverse (glb s)) ++ ((optimize . reverse) (glb s)) 
 
-
+-- Igual al compileFile dado pero usa handleDecl' en lugar de handleDecl
 compileFile' ::  MonadPCF m => String -> m ()
 compileFile' f = do
     printPCF ("Abriendo "++f++"...")
@@ -162,13 +169,15 @@ compileFile' f = do
     decls <- parseIO filename program x
     mapM_ handleDecl' decls
 
+-- Igual al handleDecl dado pero usa handleTermDecl' en lugar de 
+-- handleTermDecl
 handleDecl' :: MonadPCF m => SDecl SMNTerm MultiBind STy -> m ()
 handleDecl' decl = do let ed = elabD decl
                       case ed of
                        Right d -> handleTermDecl' d
                        Left d -> handleTypeDecl d
 
--- Maneja la ejecucion de las declaraciones de terminos.
+-- Igual al handleTermDecl dado pero no evalúa el término.
 handleTermDecl' ::  MonadPCF m => Decl SMNTerm STy -> m ()
 handleTermDecl' (Decl p name sty termSty) = do ty <- styToTy sty
                                                tt <- elab termSty
