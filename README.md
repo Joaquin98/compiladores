@@ -5,6 +5,8 @@ Entrega final de la materia Compiladores de [LCC](https://dcc.fceia.unr.edu.ar),
 - Bini, Valentina María
 - Manuel, Joaquín Luis
 
+## Instalación:
+
 Para fijar la versión de GHC y de los paquetes usamos la herramienta [stack](https://docs.haskellstack.org/en/stable/README/).
 
 Los pasos para instalar son:
